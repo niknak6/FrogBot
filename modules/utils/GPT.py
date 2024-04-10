@@ -18,7 +18,7 @@ load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
 client = QdrantClient(os.getenv('QDRANT_URL'), api_key=os.getenv('QDRANT_API'))
-vector_store = QdrantVectorStore(client=client, enable_hybrid=True, batch_size=20, collection_name="openpilot-data-sparse")
+vector_store = QdrantVectorStore(client=client, enable_hybrid=True, batch_size=20, collection_name="openpilot-data")
 Settings.llm = OpenAI(model="gpt-4-turbo-preview", max_tokens=1000)
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
