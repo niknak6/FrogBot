@@ -1,5 +1,5 @@
 # 🐸 FrogBot
-
+THIS READ ME IS OUT OF DATE!
 [![GitHub issues](https://img.shields.io/github/issues/idontneedonetho/FrogBot)](https://github.com/idontneedonetho/FrogBot/issues)
 [![GitHub stars](https://img.shields.io/github/stars/idontneedonetho/FrogBot)](https://github.com/idontneedonetho/FrogBot/stargazers)
 [![License](https://img.shields.io/github/license/idontneedonetho/FrogBot)](https://github.com/idontneedonetho/FrogBot/blob/main/LICENSE)
