@@ -46,17 +46,21 @@ async def send_bot_assistance_message(bot, message, original_poster_id):
     no_button = Button(style=ButtonStyle.danger, label="No")
     action_row = ActionRow(yes_button, no_button)
     bot_assistance_message = await channel.send(embed=embed, components=[action_row])
+    print("Bot assistance message sent")
     
     def check(interaction: Interaction):
         return interaction.message.id == bot_assistance_message.id and interaction.user.id == original_poster_id
 
+    print("Waiting for interaction...")
     interaction = await bot.wait_for("interaction", check=check)
     print(f"Interaction received from user {interaction.user.id}")
     if interaction.component.label == "Yes":
+        print("User selected 'Yes'")
         await interaction.response.send_message("The bot will now attempt to assist you.", ephemeral=True)
         first_message = await fetch_first_message_in_thread(bot, thread_id)
         await process_message_with_llm(first_message, bot)
     else:
+        print("User selected 'No'")
         await interaction.response.send_message("No bot assistance will be provided, unless you tag it.", ephemeral=True)
 
 async def fetch_first_message_in_thread(bot, thread_id):
