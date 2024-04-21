@@ -67,4 +67,4 @@ async def fetch_first_message_in_thread(bot, thread_id):
     return first_message
 
 def setup(client):
-    client.add_listener(on_thread_create)
+    client.event(on_thread_create)
