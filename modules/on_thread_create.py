@@ -19,8 +19,8 @@ async def add_reaction(message, emoji):
         print(f"Error adding reaction {emoji}: {e}")
         await asyncio.sleep(2)
 
-async def on_thread_create(thread):
-    bot = thread.guild.me
+async def on_thread_create(thread, client):
+    bot = client
     try:
         await asyncio.sleep(1)
         emojis_to_add = EMOJI_MAP.get(thread.parent_id, [])
@@ -69,4 +69,4 @@ async def fetch_first_message_in_thread(bot, thread_id):
     return first_message
 
 def setup(client):
-    client.add_listener(on_thread_create)
+    client.add_listener(lambda thread: on_thread_create(thread, client))
