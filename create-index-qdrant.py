@@ -1,3 +1,6 @@
+# Use this to select the repositories you want to index and create the index in Qdrant.
+# Run this before you run or use GPT.py, otherwise it will not work.
+
 from llama_index.core import VectorStoreIndex, Settings, StorageContext
 from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
