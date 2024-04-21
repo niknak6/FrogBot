@@ -14,10 +14,8 @@ EMOJI_MAP = {
 async def add_reaction(message, emoji):
     try:
         await message.add_reaction(emoji)
-        await asyncio.sleep(0.5)
     except Exception as e:
         print(f"Error adding reaction {emoji}: {e}")
-        await asyncio.sleep(2)
 
 async def on_thread_create(thread):
     try:
