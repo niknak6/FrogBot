@@ -19,7 +19,7 @@ async def add_reaction(message, emoji):
         print(f"Error adding reaction {emoji}: {e}")
         await asyncio.sleep(2)
 
-async def on_thread_create(thread):
+async def on_thread_create(bot, thread):
     try:
         await asyncio.sleep(1)
         emojis_to_add = EMOJI_MAP.get(thread.parent_id, [])
@@ -29,7 +29,7 @@ async def on_thread_create(thread):
                     await add_reaction(message, emoji)
                     await asyncio.sleep(0.5)
                 if thread.parent_id == 1162100167110053888:
-                    await send_bot_assistance_message(thread.guild.me, message, message.author.id)
+                    await send_bot_assistance_message(bot, message, message.author.id)
     except Exception as e:
         print(f"Error in on_thread_create: {e}")
 
@@ -60,8 +60,9 @@ async def send_bot_assistance_message(bot, message, original_poster_id):
 
 async def fetch_first_message_in_thread(bot, thread_id):
     thread = bot.get_channel(thread_id)
-    messages = await thread.history(limit=1).flatten()
-    return messages[0]
+    messages = await thread.history(limit=100).flatten()
+    first_message = sorted(messages, key=lambda m: m.created_at)[0]
+    return first_message
 
 def setup(client):
     client.event(on_thread_create)
