@@ -19,8 +19,7 @@ async def add_reaction(message, emoji):
         print(f"Error adding reaction {emoji}: {e}")
         await asyncio.sleep(2)
 
-async def on_thread_create(thread, client):
-    bot = client
+async def on_thread_create(bot, thread):
     try:
         await asyncio.sleep(1)
         emojis_to_add = EMOJI_MAP.get(thread.parent_id, [])
@@ -37,7 +36,6 @@ async def on_thread_create(thread, client):
 async def send_bot_assistance_message(bot, message, original_poster_id):
     print(f"Sending bot assistance message for user {original_poster_id}")
     channel = message.channel
-    thread_id = message.thread.id
     embed = Embed(title="Bot Assistance",
                   description="Do you want the bot to assist you with this?",
                   color=0x3498db)
@@ -69,4 +67,4 @@ async def fetch_first_message_in_thread(bot, thread_id):
     return first_message
 
 def setup(client):
-    client.add_listener(on_thread_create)
+    client.add_listener(lambda thread: on_thread_create(client, thread))
