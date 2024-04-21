@@ -44,7 +44,7 @@ async def send_bot_assistance_message(bot, message, original_poster_id):
     yes_button = Button(style=ButtonStyle.success, label="Yes")
     no_button = Button(style=ButtonStyle.danger, label="No")
     action_row = ActionRow(yes_button, no_button)
-    bot_assistance_message = await channel.send(embed=embed, components=[action_row], ephemeral=True)
+    bot_assistance_message = await channel.send(embed=embed, components=[action_row])
     
     def check(interaction: Interaction):
         return interaction.message.id == bot_assistance_message.id and interaction.user.id == original_poster_id
