@@ -10,7 +10,9 @@ import disnake
 bot_replies = {}
 
 emoji_actions = {
-    "✅": "handle_checkmark_reaction"
+    "✅": "handle_checkmark_reaction",
+    "👍": "handle_thumbsup_reaction",
+    "👎": "handle_thumbsdown_reaction"
 }
 
 emoji_points = {
@@ -31,6 +33,32 @@ emoji_responses = {
     "❤️": "being a good frog"
 }
 
+async def handle_thumbsup_reaction(bot, payload):
+    channel = bot.get_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    if message.author != bot.user:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    member = guild.get_member(payload.user_id)
+    required_rank_id = 1198482895342411846
+    if not any(role.id >= required_rank_id for role in member.roles):
+        return
+    print(f"Thumbs up reaction received from user {payload.user_id}")
+    await message.reply("Thank you for your positive feedback!")
+
+async def handle_thumbsdown_reaction(bot, payload):
+    channel = bot.get_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    if message.author != bot.user:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    member = guild.get_member(payload.user_id)
+    required_rank_id = 1198482895342411846
+    if not any(role.id >= required_rank_id for role in member.roles):
+        return
+    print(f"Thumbs down reaction received from user {payload.user_id}")
+    await message.reply("We're sorry to hear that. We'll strive to do better.")
+    
 async def process_close(bot, payload):
     if payload.user_id == bot.user.id:
         return
@@ -95,7 +123,10 @@ async def process_reaction(bot, payload):
     if emoji_name in emoji_points:
         await process_emoji_reaction(bot, payload)
     elif emoji_name in emoji_actions:
-        await process_close(bot, payload)
+        if emoji_name == "✅":
+            await process_close(bot, payload)
+        else:
+            await emoji_actions[emoji_name](bot, payload)
 
 def get_user_points(user_id):
     user_points_dict = db_access_with_retry('SELECT * FROM user_points WHERE user_id = ?', (user_id,))
