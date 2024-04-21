@@ -54,14 +54,16 @@ async def send_bot_assistance_message(bot, message, original_poster_id):
     print("Waiting for interaction...")
     interaction = await bot.wait_for("interaction", check=check)
     print(f"Interaction received from user {interaction.user.id}")
+    await interaction.response.defer()
+
     if interaction.component.label == "Yes":
         print("User selected 'Yes'")
-        await interaction.response.send_message("The bot will now attempt to assist you.", ephemeral=True)
+        await interaction.followup.send("The bot will now attempt to assist you.", ephemeral=True)
         first_message = await fetch_first_message_in_thread(bot, thread_id)
         await process_message_with_llm(first_message, bot)
     else:
         print("User selected 'No'")
-        await interaction.response.send_message("No bot assistance will be provided, unless you tag it.", ephemeral=True)
+        await interaction.followup.send("No bot assistance will be provided, unless you tag it.", ephemeral=True)
 
 async def fetch_first_message_in_thread(bot, thread_id):
     thread = bot.get_channel(thread_id)
