@@ -37,7 +37,7 @@ async def on_thread_create(thread):
             await asyncio.gather(*(add_reaction(message, emoji) for emoji in emojis_to_add))
         
         if thread.parent_id == 1162100167110053888:
-            original_message = await thread.parent.fetch_message(thread.id)
+            original_message = await thread.fetch_message(thread.id)
             message = await original_message.reply("Do you want the bot to help?")
             view = ConfirmationView(message)
             await message.edit(view=view)
