@@ -1,6 +1,8 @@
 # modules.on_thread_create
 
+from disnake.ui import Button, View
 import asyncio
+import disnake
 
 EMOJI_MAP = {
     1162100167110053888: ["🐞", "📜", "📹", "✅"],
@@ -16,22 +18,27 @@ async def add_reaction(message, emoji):
         print(f"Error adding reaction {emoji}: {e}")
         await asyncio.sleep(2)
 
-import disnake
-from disnake.ui import Button, View
+from modules.utils.GPT import process_message_with_llm
 
 class ConfirmationView(View):
-    def __init__(self, message):
+    def __init__(self, message, client):
         super().__init__()
         self.message = message
-        self.add_item(Button(style=disnake.ButtonStyle.green, label="Yes"))
+        self.client = client
+        yes_button = Button(style=disnake.ButtonStyle.green, label="Yes")
+        yes_button.callback = self.on_yes_button_clicked
+        self.add_item(yes_button)
         no_button = Button(style=disnake.ButtonStyle.red, label="No")
         no_button.callback = self.on_no_button_clicked
         self.add_item(no_button)
 
-    async def on_no_button_clicked(self, interaction):
+    async def on_yes_button_clicked(self):
+        await process_message_with_llm(self.message, self.client)
+
+    async def on_no_button_clicked(self):
         await self.message.delete()
 
-async def on_thread_create(thread):
+async def on_thread_create(thread, client):
     try:
         await asyncio.sleep(1)
         emojis_to_add = EMOJI_MAP.get(thread.parent_id, [])
@@ -40,7 +47,7 @@ async def on_thread_create(thread):
         
         if thread.parent_id == 1162100167110053888:
             message = await thread.send("Do you want the bot to help?")
-            view = ConfirmationView(message)
+            view = ConfirmationView(message, client)
             await message.edit(view=view)
     except Exception as e:
         print(f"Error in on_thread_create: {e}")
