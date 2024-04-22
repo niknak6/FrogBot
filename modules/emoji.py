@@ -91,7 +91,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
 
     async def send_reminder():
-        await asyncio.sleep(600)
+        await asyncio.sleep(43200)
         await channel.send(f"<@{original_poster_id}>, please select an option.")
 
     reminder_task = asyncio.create_task(send_reminder())
