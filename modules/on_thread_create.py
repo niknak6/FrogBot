@@ -69,5 +69,5 @@ async def fetch_first_message_in_thread(bot, thread_id):
 async def on_thread_create_wrapper(bot, thread):
     await on_thread_create(bot, thread)
 
-def setup(bot):
-    bot.add_listener(on_thread_create_wrapper)
+def setup(client):
+    client.add_listener(on_thread_create_wrapper)
