@@ -27,6 +27,8 @@ class ConfirmationView(View):
         self.add_item(no_button)
 
     async def on_no_button_clicked(self, interaction):
+        if interaction.user.id != self.message.author.id:
+            return
         await self.message.delete()
 
 async def on_thread_create(thread):
