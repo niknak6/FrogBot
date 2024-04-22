@@ -40,7 +40,7 @@ async def on_thread_create(thread):
         
         if thread.parent_id == 1162100167110053888:
             original_message = await thread.fetch_message(thread.id)
-            message = await original_message.reply("Do you want the bot to help?")
+            message = await original_message.reply("Would you like assistance from the bot? If so, please respond to this message with \"yes\".")
             view = ConfirmationView(message)
             await message.edit(view=view)
     except Exception as e:
