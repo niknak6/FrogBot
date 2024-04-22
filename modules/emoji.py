@@ -6,6 +6,7 @@ from modules.roles import check_user_points
 from disnake.ui import Button, ActionRow
 import datetime
 import disnake
+import asyncio
 
 bot_replies = {}
 
@@ -78,28 +79,31 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     thread_id = message.thread.id
     guild = bot.get_guild(payload.guild_id)
     embed = Embed(title="Resolution of Request/Report",
-                  description="Your request or report is considered resolved. Are you satisfied with the resolution?",
+                  description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                   color=0x3498db)
     embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
     yes_button = Button(style=ButtonStyle.success, label="Yes")
     no_button = Button(style=ButtonStyle.danger, label="No")
     action_row = ActionRow(yes_button, no_button)
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
-    
+
     def check(interaction: Interaction):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
 
-    interaction = await bot.wait_for("interaction", check=check)
-    print(f"Interaction received from user {interaction.user.id}")
-    if interaction.component.label == "Yes":
-        await interaction.response.send_message("Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
-        thread = disnake.utils.get(guild.threads, id=thread_id)
-        if thread is not None:
-            await thread.delete()
+    try:
+        interaction = await bot.wait_for("interaction", timeout=600, check=check)
+        print(f"Interaction received from user {interaction.user.id}")
+        if interaction.component.label == "Yes":
+            await interaction.response.send_message("Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+            thread = disnake.utils.get(guild.threads, id=thread_id)
+            if thread is not None:
+                await thread.delete()
+            else:
+                await channel.send(f"No thread found with ID {thread_id}.")
         else:
-            await channel.send(f"No thread found with ID {thread_id}.")
-    else:
-        await interaction.response.send_message("We're sorry to hear that. We'll strive to do better.")
+            await interaction.response.send_message("We're sorry to hear that. We'll strive to do better.")
+    except asyncio.TimeoutError:
+        await channel.send(f"<@{original_poster_id}>, please make sure to select an option.")
 
 async def process_emoji_reaction(bot, payload):
     guild = bot.get_guild(payload.guild_id)
