@@ -14,7 +14,7 @@ EMOJI_MAP = {
 async def add_reaction(message, emoji):
     try:
         await message.add_reaction(emoji)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
     except Exception as e:
         print(f"Error adding reaction {emoji}: {e}")
         await asyncio.sleep(2)
@@ -28,7 +28,7 @@ async def on_thread_create(thread):
             async for message in thread.history(limit=1):
                 for emoji in emojis_to_add:
                     await add_reaction(message, emoji)
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.1)
                 if thread.parent_id == 1162100167110053888:
                     await send_bot_assistance_message(bot, message, message.author.id)
     except Exception as e:
