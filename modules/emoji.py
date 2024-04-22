@@ -90,8 +90,15 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     def check(interaction: Interaction):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
 
+    async def send_reminder():
+        await asyncio.sleep(600)
+        await channel.send(f"<@{original_poster_id}>, please select an option.")
+
+    reminder_task = asyncio.create_task(send_reminder())
+
     try:
-        interaction = await bot.wait_for("interaction", timeout=600, check=check)
+        interaction = await bot.wait_for("interaction", timeout=86400, check=check)
+        reminder_task.cancel()
         print(f"Interaction received from user {interaction.user.id}")
         if interaction.component.label == "Yes":
             await interaction.response.send_message("Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
@@ -103,7 +110,13 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
         else:
             await interaction.response.send_message("We're sorry to hear that. We'll strive to do better.")
     except asyncio.TimeoutError:
-        await channel.send(f"<@{original_poster_id}>, please make sure to select an option.")
+        reminder_task.cancel()
+        await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
+        thread = disnake.utils.get(guild.threads, id=thread_id)
+        if thread is not None:
+            await thread.delete()
+        else:
+            await channel.send(f"No thread found with ID {thread_id}.")
 
 async def process_emoji_reaction(bot, payload):
     guild = bot.get_guild(payload.guild_id)
