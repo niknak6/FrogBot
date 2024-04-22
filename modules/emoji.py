@@ -126,7 +126,9 @@ async def process_reaction(bot, payload):
         if emoji_name == "✅":
             await process_close(bot, payload)
         else:
-            await emoji_actions[emoji_name](bot, payload)
+            function_name = emoji_actions[emoji_name]
+            function = globals()[function_name]
+            await function(bot, payload)
 
 def get_user_points(user_id):
     user_points_dict = db_access_with_retry('SELECT * FROM user_points WHERE user_id = ?', (user_id,))
