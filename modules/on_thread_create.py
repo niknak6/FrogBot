@@ -26,7 +26,7 @@ class ConfirmationView(View):
         no_button.callback = self.on_no_button_clicked
         self.add_item(no_button)
 
-    async def on_no_button_clicked(self):
+    async def on_no_button_clicked(self, interaction):
         await self.message.delete()
 
 async def on_thread_create(thread):
