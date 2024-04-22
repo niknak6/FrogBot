@@ -19,15 +19,16 @@ async def add_reaction(message, emoji):
         await asyncio.sleep(2)
 
 class ConfirmationView(View):
-    def __init__(self, message):
+    def __init__(self, message, original_poster_id):
         super().__init__()
         self.message = message
+        self.original_poster_id = original_poster_id
         no_button = Button(style=disnake.ButtonStyle.red, label="No")
         no_button.callback = self.on_no_button_clicked
         self.add_item(no_button)
 
     async def on_no_button_clicked(self, interaction):
-        if interaction.user.id != self.message.author.id:
+        if interaction.user.id != self.original_poster_id:
             return
         await self.message.delete()
 
@@ -41,7 +42,7 @@ async def on_thread_create(thread):
         if thread.parent_id == 1162100167110053888:
             original_message = await thread.fetch_message(thread.id)
             message = await original_message.reply("Would you like assistance from the bot? If so, please reply to this message with \"yes\".")
-            view = ConfirmationView(message)
+            view = ConfirmationView(message, original_message.author.id)
             await message.edit(view=view)
     except Exception as e:
         print(f"Error in on_thread_create: {e}")
