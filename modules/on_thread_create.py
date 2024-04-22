@@ -20,10 +20,16 @@ import disnake
 from disnake.ui import Button, View
 
 class ConfirmationView(View):
-    def __init__(self):
+    def __init__(self, message):
         super().__init__()
+        self.message = message
         self.add_item(Button(style=disnake.ButtonStyle.green, label="Yes"))
-        self.add_item(Button(style=disnake.ButtonStyle.red, label="No"))
+        no_button = Button(style=disnake.ButtonStyle.red, label="No")
+        no_button.callback = self.on_no_button_clicked
+        self.add_item(no_button)
+
+    async def on_no_button_clicked(self, interaction):
+        await self.message.delete()
 
 async def on_thread_create(thread):
     try:
@@ -33,8 +39,9 @@ async def on_thread_create(thread):
             await asyncio.gather(*(add_reaction(message, emoji) for emoji in emojis_to_add))
         
         if thread.parent_id == 1162100167110053888:
-            view = ConfirmationView()
-            await thread.send("Do you want the bot to help?", view=view)
+            message = await thread.send("Do you want the bot to help?")
+            view = ConfirmationView(message)
+            await message.edit(view=view)
     except Exception as e:
         print(f"Error in on_thread_create: {e}")
 
