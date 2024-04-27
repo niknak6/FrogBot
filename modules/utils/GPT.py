@@ -39,8 +39,8 @@ async def process_message_with_llm(message, client):
                     vector_store_query_mode="hybrid",
                     memory=memory,
                     system_prompt=(
-                        f"You are {client.user.name}, a Discord chat bot. "
-                        "The topic is OpenPilot and its various forks.\n"
+                        f"You are {client.user.name}, a Discord chat bot in the {message.channel.name} channel. "
+                        "The topic is OpenPilot and its various forks. These documents are your knowledge.\n"
                         "Always provide the links to the sources of the information, if applicable. "
                         "Always give an answer to the best of your abilities."
                     ),

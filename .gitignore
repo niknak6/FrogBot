@@ -25,3 +25,4 @@ service_account_key.json
 vector-store/
 chroma.db/
 local_nodes/
+*.db

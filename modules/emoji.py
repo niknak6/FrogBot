@@ -4,9 +4,10 @@ from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelT
 from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
 from disnake.ui import Button, ActionRow
-import datetime
+from datetime import datetime, timedelta
 import disnake
 import asyncio
+import sqlite3
 
 bot_replies = {}
 
@@ -72,7 +73,25 @@ async def process_close(bot, payload):
     if emoji_name == "✅" and ChannelType.forum and (payload.member.guild_permissions.administrator or payload.user_id == 126123710435295232):
         await handle_checkmark_reaction(bot, payload, message.author.id)
 
-async def handle_checkmark_reaction(bot, payload, original_poster_id):
+conn = sqlite3.connect('reminders.db')
+c = conn.cursor()
+c.execute('''
+    CREATE TABLE IF NOT EXISTS reminders (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        channel_id INTEGER,
+        message_id INTEGER,
+        reminder_time TEXT
+    )
+''')
+
+def load_reminders_on_start(bot):
+    bot.loop.create_task(handle_checkmark_reaction(bot, None, None, load_only=True))
+
+async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
+    if load_only:
+        await load_reminders()
+        return
     print(f"Handling checkmark reaction for user {original_poster_id}")
     channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
@@ -90,15 +109,40 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     def check(interaction: Interaction):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
 
+    async def load_reminders():
+        c = conn.cursor()
+        now = datetime.now()
+        c.execute('SELECT * FROM reminders')
+        reminders = c.fetchall()
+        for reminder in reminders:
+            user_id, channel_id, message_id, reminder_time = reminder
+            reminder_time = datetime.fromisoformat(reminder_time)
+            if reminder_time > now:
+                delay = (reminder_time - now).total_seconds()
+                asyncio.create_task(send_reminder(user_id, channel_id, message_id, delay))
+
     async def send_reminder():
         await asyncio.sleep(43200)
         await channel.send(f"<@{original_poster_id}>, please select an option.")
+    reminder_time = datetime.now() + timedelta(seconds=43200)
+    c.execute('''
+        INSERT INTO reminders (user_id, channel_id, message_id, reminder_time)
+        VALUES (?, ?, ?, ?)
+    ''', (original_poster_id, payload.channel_id, satisfaction_message.id, reminder_time.isoformat()))
+    conn.commit()
 
     reminder_task = asyncio.create_task(send_reminder())
 
     try:
         interaction = await bot.wait_for("interaction", timeout=86400, check=check)
         reminder_task.cancel()
+
+        c.execute('''
+            DELETE FROM reminders
+            WHERE user_id = ? AND channel_id = ? AND message_id = ?
+        ''', (original_poster_id, payload.channel_id, satisfaction_message.id))
+        conn.commit()
+
         print(f"Interaction received from user {interaction.user.id}")
         if interaction.component.label == "Yes":
             await interaction.response.send_message("Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
@@ -111,6 +155,13 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
             await interaction.response.send_message("We're sorry to hear that. We'll strive to do better.")
     except asyncio.TimeoutError:
         reminder_task.cancel()
+
+        c.execute('''
+            DELETE FROM reminders
+            WHERE user_id = ? AND channel_id = ? AND message_id = ?
+        ''', (original_poster_id, payload.channel_id, satisfaction_message.id))
+        conn.commit()
+
         await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
         thread = disnake.utils.get(guild.threads, id=thread_id)
         if thread is not None:

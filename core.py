@@ -4,6 +4,7 @@ from modules.utils.commons import bot_version, is_admin_or_user
 from modules.utils.GPT import process_message_with_llm
 from modules.utils.database import initialize_database
 from modules.roles import check_user_points
+from modules.emoji import load_reminders_on_start
 from disnake.ext import commands
 from dotenv import load_dotenv
 import concurrent.futures
@@ -71,7 +72,7 @@ intents = disnake.Intents(
 command_sync_flags = commands.CommandSyncFlags.default()
 command_sync_flags.sync_commands_debug = True
 client = commands.Bot(command_prefix='//', intents=intents, command_sync_flags=command_sync_flags, test_guilds=[698205243103641711, 1137853399715549214])
-
+load_reminders_on_start(client)
 module_loader = ModuleLoader('modules')
 module_loader.load_modules(client)
 
