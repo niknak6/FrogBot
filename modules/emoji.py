@@ -182,7 +182,7 @@ def create_points_embed(user, total_points, reasons, emoji_name):
     )
     embed.add_field(name="Reasons", value=reasons_text, inline=False)
     embed.add_field(name="Total Points", value=f"{total_points}", inline=True)
-    embed.set_footer(text=f"Updated on {datetime.datetime.now().strftime('%Y-%m-%d')} | '/help check_points' for more info.")
+    embed.set_footer(text=f"Updated on {datetime.datetime.now().strftime('%Y-%m-%d')} | '/check_points' for more info.")
     return embed
 
 def setup(client):
