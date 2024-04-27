@@ -92,6 +92,8 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     if load_only: return await load_reminders(bot)
     channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
+    if message is None:
+        return
     thread_id = message.thread.id
     guild = bot.get_guild(payload.guild_id)
     embed, action_row = create_embed_and_buttons(original_poster_id)
