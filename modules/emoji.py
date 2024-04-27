@@ -86,10 +86,12 @@ c.execute('''
 ''')
 
 def load_reminders_on_start(bot):
+    print("Starting to load reminders...")
     bot.loop.create_task(handle_checkmark_reaction(bot, None, None, load_only=True))
 
 async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
     async def load_reminders():
+        print("Loading reminders...")
         c = conn.cursor()
         now = datetime.now()
         c.execute('SELECT * FROM reminders')
@@ -99,6 +101,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
             reminder_time = datetime.fromisoformat(reminder_time)
             if reminder_time > now:
                 delay = (reminder_time - now).total_seconds()
+                print(f"Creating reminder for user {user_id} in channel {channel_id} with message {message_id}")
                 asyncio.create_task(send_reminder(user_id, channel_id, message_id, delay))
 
     if load_only:
@@ -131,6 +134,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
         VALUES (?, ?, ?, ?)
     ''', (original_poster_id, payload.channel_id, satisfaction_message.id, reminder_time.isoformat()))
     conn.commit()
+    print(f"Added reminder for user {original_poster_id} in channel {payload.channel_id} with message {satisfaction_message.id}")
 
     reminder_task = asyncio.create_task(send_reminder())
 
@@ -143,6 +147,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
             WHERE user_id = ? AND channel_id = ? AND message_id = ?
         ''', (original_poster_id, payload.channel_id, satisfaction_message.id))
         conn.commit()
+        print(f"Deleted reminder for user {original_poster_id} in channel {payload.channel_id} with message {satisfaction_message.id}")
 
         print(f"Interaction received from user {interaction.user.id}")
         if interaction.component.label == "Yes":
@@ -162,6 +167,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
             WHERE user_id = ? AND channel_id = ? AND message_id = ?
         ''', (original_poster_id, payload.channel_id, satisfaction_message.id))
         conn.commit()
+        print(f"Deleted reminder for user {original_poster_id} in channel {payload.channel_id} with message {satisfaction_message.id}")
 
         await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
         thread = disnake.utils.get(guild.threads, id=thread_id)
