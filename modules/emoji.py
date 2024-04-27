@@ -108,10 +108,15 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
                 delay = (reminder_time - now).total_seconds()
                 print(f"Creating reminder for user {user_id} in channel {channel_id} with message {message_id}")
                 channel = bot.get_channel(channel_id)
+                print(f"Channel ID: {channel_id}, Channel object: {channel}")
                 if channel is None:
                     print(f"Could not find channel {channel_id}. Skipping reminder.")
                     continue
-                message = await channel.fetch_message(message_id)
+                try:
+                    message = await channel.fetch_message(message_id)
+                except Exception as e:
+                    print(f"Could not fetch message {message_id} in channel {channel_id}. Error: {e}")
+                    continue
                 yes_button = Button(style=ButtonStyle.success, label="Yes")
                 no_button = Button(style=ButtonStyle.danger, label="No")
                 action_row = ActionRow(yes_button, no_button)
