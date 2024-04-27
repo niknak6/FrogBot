@@ -85,18 +85,9 @@ c.execute('''
     )
 ''')
 
-async def handle_button_interaction(bot):
-    @bot.event
-    async def on_button_click(interaction):
-        if interaction.component.label == "Yes":
-            await interaction.respond(content="You clicked Yes!")
-        elif interaction.component.label == "No":
-            await interaction.respond(content="You clicked No!")
-
 def load_reminders_on_start(bot):
     print("Starting to load reminders...")
     bot.loop.create_task(handle_checkmark_reaction(bot, None, None, load_only=True))
-    bot.loop.create_task(handle_button_interaction(bot))
 
 async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
     async def send_reminder_with_delay(user_id, channel_id, message_id, delay):
@@ -116,12 +107,9 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
             if reminder_time > now:
                 delay = (reminder_time - now).total_seconds()
                 print(f"Creating reminder for user {user_id} in channel {channel_id} with message {message_id}")
+                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, message_id, delay))
                 channel = bot.get_channel(channel_id)
-                if channel is None:
-                    print(f"Could not find channel {channel_id}. Skipping reminder.")
-                    continue
                 message = await channel.fetch_message(message_id)
-                await message.delete()
                 embed = Embed(title="Resolution of Request/Report",
                               description=f"<@{user_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                               color=0x3498db)
@@ -129,17 +117,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
                 yes_button = Button(style=ButtonStyle.success, label="Yes")
                 no_button = Button(style=ButtonStyle.danger, label="No")
                 action_row = ActionRow(yes_button, no_button)
-                new_message = await channel.send(embed=embed, components=[action_row])
-                c.execute('''
-                    DELETE FROM reminders
-                    WHERE user_id = ? AND channel_id = ? AND message_id = ?
-                ''', (user_id, channel_id, message_id))
-                c.execute('''
-                    INSERT INTO reminders (user_id, channel_id, message_id, reminder_time)
-                    VALUES (?, ?, ?, ?)
-                ''', (user_id, channel_id, new_message.id, reminder_time.isoformat()))
-                conn.commit()
-                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, new_message.id, delay))
+                await channel.send(embed=embed, components=[action_row])
 
     if load_only:
         await load_reminders()
