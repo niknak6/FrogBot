@@ -4,10 +4,9 @@ from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelT
 from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
 from disnake.ui import Button, ActionRow
-from datetime import datetime, timedelta
+import datetime
 import disnake
 import asyncio
-import sqlite3
 
 bot_replies = {}
 
@@ -73,45 +72,12 @@ async def process_close(bot, payload):
     if emoji_name == "✅" and ChannelType.forum and (payload.member.guild_permissions.administrator or payload.user_id == 126123710435295232):
         await handle_checkmark_reaction(bot, payload, message.author.id)
 
-conn = sqlite3.connect('reminders.db')
-conn.execute('''
-    CREATE TABLE IF NOT EXISTS reminders (
-        id INTEGER PRIMARY KEY,
-        user_id INTEGER,
-        channel_id INTEGER,
-        message_id INTEGER,
-        reminder_time TEXT
-    )
-''')
-
-async def send_reminder(bot, user_id, channel_id, message_id, delay):
-    await asyncio.sleep(delay)
-    channel = bot.get_channel(channel_id)
-    await channel.send(f"<@{user_id}>, please select an option.")
-
-async def load_reminders(bot):
-    now = datetime.now()
-    reminders = conn.execute('SELECT user_id, channel_id, message_id, reminder_time FROM reminders').fetchall()
-    for reminder in reminders:
-        user_id, channel_id, message_id, reminder_time = reminder
-        reminder_time = datetime.fromisoformat(reminder_time)
-        if reminder_time > now:
-            delay = (reminder_time - now).total_seconds()
-            asyncio.create_task(send_reminder(bot, user_id, channel_id, message_id, delay))
-
-def load_reminders_on_start(bot):
-    bot.loop.create_task(load_reminders(bot))
-
-async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
-    if load_only:
-        await load_reminders(bot)
-        return
-
-    channel = await bot.fetch_channel(payload.channel_id)
+async def handle_checkmark_reaction(bot, payload, original_poster_id):
+    print(f"Handling checkmark reaction for user {original_poster_id}")
+    channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
     thread_id = message.thread.id
-    guild = await bot.fetch_guild(payload.guild_id)
-    
+    guild = bot.get_guild(payload.guild_id)
     embed = Embed(title="Resolution of Request/Report",
                   description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                   color=0x3498db)
@@ -119,40 +85,38 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     yes_button = Button(style=ButtonStyle.success, label="Yes")
     no_button = Button(style=ButtonStyle.danger, label="No")
     action_row = ActionRow(yes_button, no_button)
-
-    async with channel.typing():
-        satisfaction_message = await channel.send(embed=embed, components=[action_row])
+    satisfaction_message = await channel.send(embed=embed, components=[action_row])
 
     def check(interaction: Interaction):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
 
-    reminder_time = datetime.now() + timedelta(seconds=43200)
-    
-    with sqlite3.connect('reminders.db') as conn:
-        conn.execute('INSERT INTO reminders (user_id, channel_id, message_id, reminder_time) VALUES (?, ?, ?, ?)',
-                     (original_poster_id, payload.channel_id, satisfaction_message.id, reminder_time.isoformat()))
+    async def send_reminder():
+        await asyncio.sleep(43200)
+        await channel.send(f"<@{original_poster_id}>, please select an option.")
+
+    reminder_task = asyncio.create_task(send_reminder())
 
     try:
         interaction = await bot.wait_for("interaction", timeout=86400, check=check)
-        with sqlite3.connect('reminders.db') as conn:
-            conn.execute('DELETE FROM reminders WHERE user_id = ? AND channel_id = ? AND message_id = ?',
-                         (original_poster_id, payload.channel_id, satisfaction_message.id))
-        await interaction.response.defer()
+        reminder_task.cancel()
+        print(f"Interaction received from user {interaction.user.id}")
         if interaction.component.label == "Yes":
-            await interaction.edit_original_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.", embed=None, components=[])
+            await interaction.response.send_message("Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             thread = disnake.utils.get(guild.threads, id=thread_id)
             if thread is not None:
                 await thread.delete()
+            else:
+                await channel.send(f"No thread found with ID {thread_id}.")
         else:
-            await interaction.edit_original_message(content="We're sorry to hear that. We'll strive to do better.", embed=None, components=[])
+            await interaction.response.send_message("We're sorry to hear that. We'll strive to do better.")
     except asyncio.TimeoutError:
-        with sqlite3.connect('reminders.db') as conn:
-            conn.execute('DELETE FROM reminders WHERE user_id = ? AND channel_id = ? AND message_id = ?',
-                         (original_poster_id, payload.channel_id, satisfaction_message.id))
+        reminder_task.cancel()
         await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
         thread = disnake.utils.get(guild.threads, id=thread_id)
         if thread is not None:
             await thread.delete()
+        else:
+            await channel.send(f"No thread found with ID {thread_id}.")
 
 async def process_emoji_reaction(bot, payload):
     guild = bot.get_guild(payload.guild_id)

@@ -4,7 +4,6 @@ from modules.utils.commons import bot_version, is_admin_or_user
 from modules.utils.GPT import process_message_with_llm
 from modules.utils.database import initialize_database
 from modules.roles import check_user_points
-from modules.emoji import handle_checkmark_reaction
 from disnake.ext import commands
 from dotenv import load_dotenv
 import concurrent.futures
@@ -170,7 +169,6 @@ async def git_pull_origin(ctx, branch):
 async def on_ready():
     await initialize_database()
     await check_user_points(client)
-    await handle_checkmark_reaction(client, None, None, load_only=True)
     await client.change_presence(activity=disnake.Game(name=f"/help | {bot_version}"))
     print(f'Logged in as {client.user.name}')
     try:
