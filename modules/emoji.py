@@ -1,6 +1,6 @@
 # modules.emoji
 
-from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelType
+from disnake import Button, ButtonStyle, ActionRow, Embed, ChannelType
 from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
 from disnake.ui import Button, ActionRow
