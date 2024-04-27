@@ -106,7 +106,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     guild = bot.get_guild(payload.guild_id)
     embed, action_row = create_embed_and_buttons(original_poster_id)
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
-    check = lambda interaction: interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
+    check = lambda interaction: isinstance(interaction, disnake.MessageInteraction) and interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
     reminder_time = datetime.now() + timedelta(seconds=43200)
     c.execute('INSERT INTO reminders (user_id, channel_id, message_id, reminder_time) VALUES (?, ?, ?, ?)', (original_poster_id, payload.channel_id, satisfaction_message.id, reminder_time.isoformat()))
     conn.commit()
