@@ -8,6 +8,7 @@ from contextlib import suppress
 import datetime
 import disnake
 import asyncio
+import sqlite3
 
 bot_replies = {}
 
@@ -73,26 +74,42 @@ async def process_close(bot, payload):
     if emoji_name == "✅" and ChannelType.forum and (payload.member.guild_permissions.administrator or payload.user_id == 126123710435295232):
         await handle_checkmark_reaction(bot, payload, message.author.id)
 
+conn = sqlite3.connect('interactions.db')
+c = conn.cursor()
+c.execute('''
+    CREATE TABLE IF NOT EXISTS interactions (
+        user_id INTEGER,
+        message_id INTEGER,
+        channel_id INTEGER,
+        thread_id INTEGER,
+        created_at TIMESTAMP
+    )
+''')
+conn.commit()
+
 async def handle_checkmark_reaction(bot, payload, original_poster_id):
     channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
     thread_id = message.thread.id
     guild = bot.get_guild(payload.guild_id)
-
     embed = Embed(title="Resolution of Request/Report",
                   description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                   color=0x3498db)
     embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
     action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes"), Button(style=ButtonStyle.danger, label="No"))
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
-
     def check(interaction: Interaction):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
-
     async def send_reminder():
         await asyncio.sleep(43200)
         await channel.send(f"<@{original_poster_id}>, please select an option.")
     reminder_task = asyncio.create_task(send_reminder())
+
+    c.execute('''
+        INSERT INTO interactions (user_id, message_id, channel_id, thread_id, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (original_poster_id, payload.message_id, payload.channel_id, thread_id, datetime.now()))
+    conn.commit()
 
     try:
         interaction = await bot.wait_for("interaction", timeout=86400, check=check)
@@ -110,6 +127,18 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     finally:
         with suppress(asyncio.CancelledError):
             reminder_task.cancel()
+
+        c.execute('DELETE FROM interactions WHERE message_id = ?', (payload.message_id,))
+        conn.commit()
+
+async def on_shutdown():
+    conn.close()
+
+c.execute('SELECT * FROM interactions')
+interactions = c.fetchall()
+
+for interaction in interactions:
+    pass
 
 async def process_emoji_reaction(bot, payload):
     guild = bot.get_guild(payload.guild_id)
@@ -179,6 +208,7 @@ def create_points_embed(user, total_points, reasons, emoji_name):
     return embed
 
 def setup(client):
+    client.add_listener(on_shutdown, 'on_shutdown')
     @client.event
     async def on_raw_reaction_add(payload):
         await process_reaction(client, payload)
