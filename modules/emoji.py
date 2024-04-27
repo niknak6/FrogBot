@@ -1,6 +1,6 @@
 # modules.emoji
 
-from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelType
+from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelType, InteractionType
 from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
 from disnake.ui import Button, ActionRow
@@ -142,7 +142,10 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
 
     def check(interaction: Interaction):
-        return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
+        if interaction.type == InteractionType.message_component:
+            return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
+        elif interaction.type == InteractionType.application_command:
+            return interaction.user.id == original_poster_id
 
     async def send_reminder():
         await asyncio.sleep(43200)
