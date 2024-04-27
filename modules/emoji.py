@@ -142,8 +142,8 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
 
     def check(interaction: Interaction):
-        if interaction.type == InteractionType.message_component:
-            return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
+        if interaction.type == InteractionType.component:
+            return interaction.resolved.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
         elif interaction.type == InteractionType.application_command:
             return interaction.user.id == original_poster_id
 
