@@ -87,6 +87,9 @@ async def load_reminders(bot):
     for user_id, channel_id, message_id, reminder_time in reminders:
         if datetime.fromisoformat(reminder_time) > now:
             channel = bot.get_channel(channel_id)
+            if channel is None:
+                print(f"Channel with ID {channel_id} not found or bot does not have access.")
+                continue
             message = await channel.fetch_message(message_id)
             if message is not None:
                 embed, action_row = create_embed_and_buttons(user_id)
