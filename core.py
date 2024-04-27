@@ -138,7 +138,7 @@ async def update(ctx, branch="beta"):
         await git_stash(ctx)
         await git_pull_origin(ctx, branch)
     except Exception as e:
-        await ctx.response.send_message(f'Error updating the script: {e}', ephemeral=True)
+        await ctx.followup.send(f'Error updating the script: {e}')
 
 async def switch_branch(ctx, branch):
     current_branch_proc = await asyncio.create_subprocess_exec(
@@ -161,7 +161,7 @@ async def git_pull_origin(ctx, branch):
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     _, stderr = await pull_proc.communicate()
     if pull_proc.returncode == 0:
-        await ctx.response.send_message('Git pull successful.', ephemeral=True)
+        await ctx.followup.send('Git pull successful.')
     else:
         raise Exception(stderr.decode())
 
