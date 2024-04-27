@@ -1,6 +1,6 @@
 # modules.emoji
 
-from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelType, InteractionType
+from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelType
 from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
 from disnake.ui import Button, ActionRow
@@ -108,20 +108,22 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
                 delay = (reminder_time - now).total_seconds()
                 print(f"Creating reminder for user {user_id} in channel {channel_id} with message {message_id}")
                 channel = bot.get_channel(channel_id)
-                print(f"Channel ID: {channel_id}, Channel object: {channel}")
                 if channel is None:
                     print(f"Could not find channel {channel_id}. Skipping reminder.")
                     continue
-                try:
-                    message = await channel.fetch_message(message_id)
-                except Exception as e:
-                    print(f"Could not fetch message {message_id} in channel {channel_id}. Error: {e}")
-                    continue
-                yes_button = Button(style=ButtonStyle.success, label="Yes")
-                no_button = Button(style=ButtonStyle.danger, label="No")
-                action_row = ActionRow(yes_button, no_button)
-                await message.edit(components=[action_row])
-                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, message_id, delay))
+                message = await channel.fetch_message(message_id)
+                await message.delete()
+                new_message = await channel.send(f"<@{user_id}>, please select an option.")
+                c.execute('''
+                    DELETE FROM reminders
+                    WHERE user_id = ? AND channel_id = ? AND message_id = ?
+                ''', (user_id, channel_id, message_id))
+                c.execute('''
+                    INSERT INTO reminders (user_id, channel_id, message_id, reminder_time)
+                    VALUES (?, ?, ?, ?)
+                ''', (user_id, channel_id, new_message.id, reminder_time.isoformat()))
+                conn.commit()
+                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, new_message.id, delay))
 
     if load_only:
         await load_reminders()
@@ -142,10 +144,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
 
     def check(interaction: Interaction):
-        if interaction.type == InteractionType.component:
-            return interaction.resolved.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
-        elif interaction.type == InteractionType.application_command:
-            return interaction.user.id == original_poster_id
+        return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
 
     async def send_reminder():
         await asyncio.sleep(43200)
