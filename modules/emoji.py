@@ -94,7 +94,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
         print("Loading reminders...")
         c = conn.cursor()
         now = datetime.now()
-        c.execute('SELECT * FROM reminders')
+        c.execute('SELECT user_id, channel_id, message_id, reminder_time FROM reminders')
         reminders = c.fetchall()
         for reminder in reminders:
             user_id, channel_id, message_id, reminder_time = reminder
