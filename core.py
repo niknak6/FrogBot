@@ -4,7 +4,7 @@ from modules.utils.commons import bot_version, is_admin_or_user
 from modules.utils.GPT import process_message_with_llm
 from modules.utils.database import initialize_database
 from modules.roles import check_user_points
-from modules.emoji import load_reminders_on_start, handle_checkmark_reaction
+from modules.emoji import handle_checkmark_reaction
 from disnake.ext import commands
 from dotenv import load_dotenv
 import concurrent.futures
@@ -72,7 +72,7 @@ intents = disnake.Intents(
 command_sync_flags = commands.CommandSyncFlags.default()
 command_sync_flags.sync_commands_debug = True
 client = commands.Bot(command_prefix='//', intents=intents, command_sync_flags=command_sync_flags, test_guilds=[698205243103641711, 1137853399715549214])
-#load_reminders_on_start(client)
+
 module_loader = ModuleLoader('modules')
 module_loader.load_modules(client)
 
@@ -90,7 +90,6 @@ core_script = root_dir / 'core.py'
 @is_admin_or_user()
 async def restart(ctx):
     try:
-        await ctx.send("Restarting bot, please wait...")
         with open("restart_channel_id.txt", "w") as file:
             file.write(str(ctx.channel.id))
         for cmd in list(ctx.bot.all_commands.keys()):
@@ -101,11 +100,11 @@ async def restart(ctx):
         await ctx.bot.close()
         os._exit(0)
     except PermissionError:
-        await ctx.send("Bot does not have permission to perform the restart operation.")
+        await ctx.response.send_message("Bot does not have permission to perform the restart operation.", ephemeral=True)
     except FileNotFoundError:
-        await ctx.send("Could not find the core.py script.")
+        await ctx.response.send_message("Could not find the core.py script.", ephemeral=True)
     except Exception as e:
-        await ctx.send(f"An error occurred while trying to restart the bot: {e}")
+        await ctx.response.send_message(f"An error occurred while trying to restart the bot: {e}", ephemeral=True)
 
 @client.slash_command(description = "Shut down the bot.")
 @is_admin_or_user()
@@ -138,7 +137,7 @@ async def update(ctx, branch="beta"):
         await git_stash(ctx)
         await git_pull_origin(ctx, branch)
     except Exception as e:
-        await ctx.send(f'Error updating the script: {e}')
+        await ctx.response.send_message(f'Error updating the script: {e}', ephemeral=True)
 
 async def switch_branch(ctx, branch):
     current_branch_proc = await asyncio.create_subprocess_exec(
@@ -147,13 +146,13 @@ async def switch_branch(ctx, branch):
     stdout, _ = await current_branch_proc.communicate()
     current_branch = stdout.decode().strip()
     if current_branch != branch:
-        await ctx.send(f"Switching to branch {branch}")
+        await ctx.response.send_message(f"Switching to branch {branch}", ephemeral=True)
         await asyncio.create_subprocess_exec("git", "checkout", branch)
 
 async def git_stash(ctx):
     stash_proc = await asyncio.create_subprocess_exec("git", "stash")
     await stash_proc.communicate()
-    await ctx.send('Changes stashed successfully.')
+    await ctx.response.send_message('Changes stashed successfully.', ephemeral=True)
 
 async def git_pull_origin(ctx, branch):
     pull_proc = await asyncio.create_subprocess_exec(
@@ -161,7 +160,7 @@ async def git_pull_origin(ctx, branch):
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     _, stderr = await pull_proc.communicate()
     if pull_proc.returncode == 0:
-        await ctx.send('Git pull successful.')
+        await ctx.response.send_message('Git pull successful.', ephemeral=True)
     else:
         raise Exception(stderr.decode())
 
