@@ -109,15 +109,18 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
                 print(f"Creating reminder for user {user_id} in channel {channel_id} with message {message_id}")
                 asyncio.create_task(send_reminder_with_delay(user_id, channel_id, message_id, delay))
                 channel = bot.get_channel(channel_id)
-                message = await channel.fetch_message(message_id)
-                embed = Embed(title="Resolution of Request/Report",
-                              description=f"<@{user_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
-                              color=0x3498db)
-                embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
-                yes_button = Button(style=ButtonStyle.success, label="Yes")
-                no_button = Button(style=ButtonStyle.danger, label="No")
-                action_row = ActionRow(yes_button, no_button)
-                await channel.send(embed=embed, components=[action_row])
+                if channel is not None:
+                    message = await channel.fetch_message(message_id)
+                    embed = Embed(title="Resolution of Request/Report",
+                                  description=f"<@{user_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
+                                  color=0x3498db)
+                    embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
+                    yes_button = Button(style=ButtonStyle.success, label="Yes")
+                    no_button = Button(style=ButtonStyle.danger, label="No")
+                    action_row = ActionRow(yes_button, no_button)
+                    await channel.send(embed=embed, components=[action_row])
+                else:
+                    print(f"Channel with ID {channel_id} not found.")
 
     if load_only:
         await load_reminders()
