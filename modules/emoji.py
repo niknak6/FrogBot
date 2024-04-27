@@ -87,9 +87,9 @@ c.execute('''
 
 def load_reminders_on_start(bot):
     print("Starting to load reminders...")
-    bot.loop.create_task(handle_checkmark_reaction(bot, None, None, load_only=True))
+    bot.loop.create_task(handle_checkmark_reaction(bot, None, None, None, load_only=True))
 
-async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
+async def handle_checkmark_reaction(bot, payload, original_poster_id, message_id, load_only=False):
     async def send_reminder_with_delay(user_id, channel_id, message_id, delay):
         await asyncio.sleep(delay)
         channel = bot.get_channel(channel_id)
@@ -146,14 +146,12 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     try:
         interaction = await bot.wait_for("interaction", timeout=86400, check=check)
         reminder_task.cancel()
-
         c.execute('''
             DELETE FROM reminders
             WHERE user_id = ? AND channel_id = ? AND message_id = ?
         ''', (original_poster_id, payload.channel_id, satisfaction_message.id))
         conn.commit()
         print(f"Deleted reminder for user {original_poster_id} in channel {payload.channel_id} with message {satisfaction_message.id}")
-
         print(f"Interaction received from user {interaction.user.id}")
         if interaction.component.label == "Yes":
             await interaction.response.send_message("Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
@@ -166,14 +164,12 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
             await interaction.response.send_message("We're sorry to hear that. We'll strive to do better.")
     except asyncio.TimeoutError:
         reminder_task.cancel()
-
         c.execute('''
             DELETE FROM reminders
             WHERE user_id = ? AND channel_id = ? AND message_id = ?
         ''', (original_poster_id, payload.channel_id, satisfaction_message.id))
         conn.commit()
         print(f"Deleted reminder for user {original_poster_id} in channel {payload.channel_id} with message {satisfaction_message.id}")
-
         await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
         thread = disnake.utils.get(guild.threads, id=thread_id)
         if thread is not None:
