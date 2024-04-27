@@ -85,9 +85,18 @@ c.execute('''
     )
 ''')
 
+async def handle_button_interaction(bot):
+    @bot.event
+    async def on_button_click(interaction):
+        if interaction.component.label == "Yes":
+            await interaction.respond(content="You clicked Yes!")
+        elif interaction.component.label == "No":
+            await interaction.respond(content="You clicked No!")
+
 def load_reminders_on_start(bot):
     print("Starting to load reminders...")
     bot.loop.create_task(handle_checkmark_reaction(bot, None, None, load_only=True))
+    bot.loop.create_task(handle_button_interaction(bot))
 
 async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
     async def send_reminder_with_delay(user_id, channel_id, message_id, delay):
