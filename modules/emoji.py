@@ -113,7 +113,14 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
                     continue
                 message = await channel.fetch_message(message_id)
                 await message.delete()
-                new_message = await channel.send(f"<@{user_id}>, please select an option.")
+                embed = Embed(title="Resolution of Request/Report",
+                              description=f"<@{user_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
+                              color=0x3498db)
+                embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
+                yes_button = Button(style=ButtonStyle.success, label="Yes")
+                no_button = Button(style=ButtonStyle.danger, label="No")
+                action_row = ActionRow(yes_button, no_button)
+                new_message = await channel.send(embed=embed, components=[action_row])
                 c.execute('''
                     DELETE FROM reminders
                     WHERE user_id = ? AND channel_id = ? AND message_id = ?
