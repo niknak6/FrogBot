@@ -89,9 +89,22 @@ def load_reminders_on_start(bot):
     bot.loop.create_task(handle_checkmark_reaction(bot, None, None, load_only=True))
 
 async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
+    async def load_reminders():
+        c = conn.cursor()
+        now = datetime.now()
+        c.execute('SELECT * FROM reminders')
+        reminders = c.fetchall()
+        for reminder in reminders:
+            user_id, channel_id, message_id, reminder_time = reminder
+            reminder_time = datetime.fromisoformat(reminder_time)
+            if reminder_time > now:
+                delay = (reminder_time - now).total_seconds()
+                asyncio.create_task(send_reminder(user_id, channel_id, message_id, delay))
+
     if load_only:
         await load_reminders()
         return
+
     print(f"Handling checkmark reaction for user {original_poster_id}")
     channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
@@ -108,18 +121,6 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
 
     def check(interaction: Interaction):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
-
-    async def load_reminders():
-        c = conn.cursor()
-        now = datetime.now()
-        c.execute('SELECT * FROM reminders')
-        reminders = c.fetchall()
-        for reminder in reminders:
-            user_id, channel_id, message_id, reminder_time = reminder
-            reminder_time = datetime.fromisoformat(reminder_time)
-            if reminder_time > now:
-                delay = (reminder_time - now).total_seconds()
-                asyncio.create_task(send_reminder(user_id, channel_id, message_id, delay))
 
     async def send_reminder():
         await asyncio.sleep(43200)
