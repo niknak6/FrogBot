@@ -112,15 +112,11 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
                     print(f"Could not find channel {channel_id}. Skipping reminder.")
                     continue
                 message = await channel.fetch_message(message_id)
-                await message.delete()
-                new_message = await channel.send(f"<@{user_id}>, please select an option.")
-                c.execute('''
-                    UPDATE reminders
-                    SET message_id = ?
-                    WHERE user_id = ? AND channel_id = ? AND message_id = ?
-                ''', (new_message.id, user_id, channel_id, message_id))
-                conn.commit()
-                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, new_message.id, delay))
+                yes_button = Button(style=ButtonStyle.success, label="Yes")
+                no_button = Button(style=ButtonStyle.danger, label="No")
+                action_row = ActionRow(yes_button, no_button)
+                await message.edit(components=[action_row])
+                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, message_id, delay))
 
     if load_only:
         await load_reminders()
