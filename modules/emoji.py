@@ -98,11 +98,11 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
         interaction = await bot.wait_for("interaction", timeout=86400, check=check)
         thread = disnake.utils.get(guild.threads, id=thread_id)
         if interaction.component.label == "Yes":
-            await interaction.response.edit_origin(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+            await interaction.response.edit_original_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             if thread:
                 await thread.delete()
         else:
-            await interaction.response.edit_origin(content="We're sorry to hear that. We'll strive to do better.")
+            await interaction.response.edit_original_message(content="We're sorry to hear that. We'll strive to do better.")
     except asyncio.TimeoutError:
         await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
         if thread:
