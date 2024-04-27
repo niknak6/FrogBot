@@ -5,7 +5,7 @@ from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
 from disnake.ui import Button, ActionRow
 from contextlib import suppress
-import datetime
+from datetime import datetime
 import disnake
 import asyncio
 import sqlite3
