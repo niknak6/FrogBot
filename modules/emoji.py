@@ -90,7 +90,10 @@ load_reminders_on_start = lambda bot: bot.loop.create_task(load_reminders(bot))
 
 async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
     if load_only: return await load_reminders(bot)
-    channel, message, thread_id, guild = bot.get_channel(payload.channel_id), await bot.get_channel(payload.channel_id).fetch_message(payload.message_id), message.thread.id, bot.get_guild(payload.guild_id)
+    channel = bot.get_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    thread_id = message.thread.id
+    guild = bot.get_guild(payload.guild_id)
     embed, action_row = create_embed_and_buttons(original_poster_id)
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
     check = lambda interaction: interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
