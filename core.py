@@ -95,6 +95,7 @@ async def restart(ctx):
         for cmd in list(ctx.bot.all_commands.keys()):
             ctx.bot.remove_command(cmd)
         await asyncio.sleep(3)
+        await ctx.response.send_message("Restarting the bot...", ephemeral=True)
         subprocess.Popen([sys.executable, str(core_script)])
         await asyncio.sleep(2)
         await ctx.bot.close()

@@ -84,7 +84,15 @@ async def send_reminder(bot, user_id, channel_id, message_id, delay): await asyn
 async def load_reminders(bot):
     now = datetime.now()
     reminders = c.execute('SELECT user_id, channel_id, message_id, reminder_time FROM reminders').fetchall()
-    [asyncio.create_task(send_reminder(bot, user_id, channel_id, message_id, (datetime.fromisoformat(reminder_time) - now).total_seconds())) for user_id, channel_id, message_id, reminder_time in reminders if datetime.fromisoformat(reminder_time) > now]
+    for user_id, channel_id, message_id, reminder_time in reminders:
+        if datetime.fromisoformat(reminder_time) > now:
+            channel = bot.get_channel(channel_id)
+            message = await channel.fetch_message(message_id)
+            if message is not None:
+                embed, action_row = create_embed_and_buttons(user_id)
+                await message.edit(embed=embed, components=[action_row])
+            delay = (datetime.fromisoformat(reminder_time) - now).total_seconds()
+            asyncio.create_task(send_reminder(bot, user_id, channel_id, message_id, delay))
 
 load_reminders_on_start = lambda bot: bot.loop.create_task(load_reminders(bot))
 
