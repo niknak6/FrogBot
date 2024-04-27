@@ -107,7 +107,17 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
             if reminder_time > now:
                 delay = (reminder_time - now).total_seconds()
                 print(f"Creating reminder for user {user_id} in channel {channel_id} with message {message_id}")
-                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, message_id, delay))
+                channel = bot.get_channel(channel_id)
+                message = await channel.fetch_message(message_id)
+                await message.delete()
+                new_message = await channel.send(f"<@{user_id}>, please select an option.")
+                c.execute('''
+                    UPDATE reminders
+                    SET message_id = ?
+                    WHERE user_id = ? AND channel_id = ? AND message_id = ?
+                ''', (new_message.id, user_id, channel_id, message_id))
+                conn.commit()
+                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, new_message.id, delay))
 
     if load_only:
         await load_reminders()
