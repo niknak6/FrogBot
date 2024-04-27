@@ -85,45 +85,42 @@ c.execute('''
     )
 ''')
 
+def create_embed_and_buttons(user_id):
+    embed = Embed(title="Resolution of Request/Report",
+                  description=f"<@{user_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
+                  color=0x3498db)
+    embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
+    yes_button = Button(style=ButtonStyle.success, label="Yes")
+    no_button = Button(style=ButtonStyle.danger, label="No")
+    action_row = ActionRow(yes_button, no_button)
+    return embed, action_row
+
+async def send_reminder(bot, user_id, channel_id, message_id, delay):
+    await asyncio.sleep(delay)
+    channel = bot.get_channel(channel_id)
+    await channel.send(f"<@{user_id}>, please select an option.")
+
+async def load_reminders(bot):
+    print("Loading reminders...")
+    c = conn.cursor()
+    now = datetime.now()
+    c.execute('SELECT user_id, channel_id, message_id, reminder_time FROM reminders')
+    reminders = c.fetchall()
+    for reminder in reminders:
+        user_id, channel_id, message_id, reminder_time = reminder
+        reminder_time = datetime.fromisoformat(reminder_time)
+        if reminder_time > now:
+            delay = (reminder_time - now).total_seconds()
+            print(f"Creating reminder for user {user_id} in channel {channel_id} with message {message_id}")
+            asyncio.create_task(send_reminder(bot, user_id, channel_id, message_id, delay))
+
 def load_reminders_on_start(bot):
     print("Starting to load reminders...")
-    bot.loop.create_task(handle_checkmark_reaction(bot, None, None, load_only=True))
+    bot.loop.create_task(load_reminders(bot))
 
 async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
-    async def send_reminder_with_delay(user_id, channel_id, message_id, delay):
-        await asyncio.sleep(delay)
-        channel = bot.get_channel(channel_id)
-        await channel.send(f"<@{user_id}>, please select an option.")
-
-    async def load_reminders():
-        print("Loading reminders...")
-        c = conn.cursor()
-        now = datetime.now()
-        c.execute('SELECT user_id, channel_id, message_id, reminder_time FROM reminders')
-        reminders = c.fetchall()
-        for reminder in reminders:
-            user_id, channel_id, message_id, reminder_time = reminder
-            reminder_time = datetime.fromisoformat(reminder_time)
-            if reminder_time > now:
-                delay = (reminder_time - now).total_seconds()
-                print(f"Creating reminder for user {user_id} in channel {channel_id} with message {message_id}")
-                asyncio.create_task(send_reminder_with_delay(user_id, channel_id, message_id, delay))
-                channel = bot.get_channel(channel_id)
-                if channel is not None:
-                    message = await channel.fetch_message(message_id)
-                    embed = Embed(title="Resolution of Request/Report",
-                                  description=f"<@{user_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
-                                  color=0x3498db)
-                    embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
-                    yes_button = Button(style=ButtonStyle.success, label="Yes")
-                    no_button = Button(style=ButtonStyle.danger, label="No")
-                    action_row = ActionRow(yes_button, no_button)
-                    await channel.send(embed=embed, components=[action_row])
-                else:
-                    print(f"Channel with ID {channel_id} not found.")
-
     if load_only:
-        await load_reminders()
+        await load_reminders(bot)
         return
 
     print(f"Handling checkmark reaction for user {original_poster_id}")
@@ -131,21 +128,12 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     message = await channel.fetch_message(payload.message_id)
     thread_id = message.thread.id
     guild = bot.get_guild(payload.guild_id)
-    embed = Embed(title="Resolution of Request/Report",
-                  description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
-                  color=0x3498db)
-    embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
-    yes_button = Button(style=ButtonStyle.success, label="Yes")
-    no_button = Button(style=ButtonStyle.danger, label="No")
-    action_row = ActionRow(yes_button, no_button)
+    embed, action_row = create_embed_and_buttons(original_poster_id)
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
 
     def check(interaction: Interaction):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
 
-    async def send_reminder():
-        await asyncio.sleep(43200)
-        await channel.send(f"<@{original_poster_id}>, please select an option.")
     reminder_time = datetime.now() + timedelta(seconds=43200)
     c.execute('''
         INSERT INTO reminders (user_id, channel_id, message_id, reminder_time)
@@ -154,7 +142,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
     conn.commit()
     print(f"Added reminder for user {original_poster_id} in channel {payload.channel_id} with message {satisfaction_message.id}")
 
-    reminder_task = asyncio.create_task(send_reminder())
+    reminder_task = asyncio.create_task(send_reminder(bot, original_poster_id, payload.channel_id, satisfaction_message.id, 43200))
 
     try:
         interaction = await bot.wait_for("interaction", timeout=86400, check=check)
