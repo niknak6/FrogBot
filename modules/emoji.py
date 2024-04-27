@@ -153,15 +153,16 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=
         conn.commit()
         print(f"Deleted reminder for user {original_poster_id} in channel {payload.channel_id} with message {satisfaction_message.id}")
         print(f"Interaction received from user {interaction.user.id}")
+        await interaction.response.defer()
         if interaction.component.label == "Yes":
-            await interaction.response.send_message("Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+            await interaction.edit_original_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             thread = disnake.utils.get(guild.threads, id=thread_id)
             if thread is not None:
                 await thread.delete()
             else:
                 await channel.send(f"No thread found with ID {thread_id}.")
         else:
-            await interaction.response.send_message("We're sorry to hear that. We'll strive to do better.")
+            await interaction.edit_original_message(content="We're sorry to hear that. We'll strive to do better.")
     except asyncio.TimeoutError:
         reminder_task.cancel()
         c.execute('''
