@@ -87,9 +87,9 @@ c.execute('''
 
 def load_reminders_on_start(bot):
     print("Starting to load reminders...")
-    bot.loop.create_task(handle_checkmark_reaction(bot, None, None, None, load_only=True))
+    bot.loop.create_task(handle_checkmark_reaction(bot, None, None, load_only=True))
 
-async def handle_checkmark_reaction(bot, payload, original_poster_id, message_id, load_only=False):
+async def handle_checkmark_reaction(bot, payload, original_poster_id, load_only=False):
     async def send_reminder_with_delay(user_id, channel_id, message_id, delay):
         await asyncio.sleep(delay)
         channel = bot.get_channel(channel_id)
