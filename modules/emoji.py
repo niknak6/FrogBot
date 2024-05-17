@@ -78,6 +78,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     message = await channel.fetch_message(payload.message_id)
     thread_id = message.thread.id
     guild = bot.get_guild(payload.guild_id)
+    thread = disnake.utils.get(guild.threads, id=thread_id)
     embed = Embed(title="Resolution of Request/Report",
                   description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                   color=0x3498db)
