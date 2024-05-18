@@ -26,3 +26,4 @@ vector-store/
 chroma.db/
 local_nodes/
 *.db
+DiscordDocs/

@@ -1,7 +1,4 @@
-# Use this to select the repositories you want to index and create the index in Qdrant.
-# Run this before you run or use GPT.py, otherwise it will not work.
-
-from llama_index.core import VectorStoreIndex, Settings, StorageContext
+from llama_index.core import VectorStoreIndex, Settings, StorageContext, SimpleDirectoryReader
 from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.qdrant import QdrantVectorStore
@@ -70,6 +67,11 @@ for config in tqdm(repos_config, desc="Loading documents from repositories"):
     except httpx.ConnectTimeout:
         print(f"Connection timeout for {config['owner']}/{config['repo']}.", file=sys.stderr)
         sys.exit(1)
+
+dir_path = 'DiscordDocs'
+reader = SimpleDirectoryReader(input_dir=dir_path, required_exts=[".txt"])
+local_docs = reader.load_data()
+all_docs.update({"local_files": local_docs})
 
 # Scrape the wiki
 scraper = WholeSiteReader(
