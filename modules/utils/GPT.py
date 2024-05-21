@@ -1,13 +1,12 @@
 # modules.utils.GPT
 
-from modules.utils.commons import send_long_message, fetch_reply_chain, HistoryChatMessage
-from llama_index.core import StorageContext, Settings, VectorStoreIndex
+from modules.utils.commons import send_long_message, fetch_reply_chain
+from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.tools import QueryEngineTool, ToolMetadata
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.agent import ReActAgent
-from llama_index.core.llms import MessageRole as Role
+from llama_index.core.llms import ChatMessage
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.llms.openai import OpenAI
 from dotenv import load_dotenv
@@ -111,24 +110,30 @@ async def process_message_with_llm(message, client):
     if content:
         try:
             async with message.channel.typing():
+                reply_chain = await fetch_reply_chain(message)
+                chat_history = [ChatMessage(content=msg.content, role=msg.role) for msg in reply_chain]
+                memory = ChatMemoryBuffer.from_defaults(chat_history=chat_history, token_limit=8000)
                 chat_engine = ReActAgent.from_tools(
                     query_engine_tools,
                     system_prompt=(
                         f"You, {client.user.name}, are a Discord bot in '{message.channel.name}', facilitating OpenPilot discussions. "
                         "With a vast knowledge base, your goal is to provide comprehensive, accurate responses. "
                         "\nStrive for well-rounded answers, offering context and related information. "
-                        "Value lies in answer's depth, not speed. "
-                        "Maintain a respectful, helpful demeanor to foster a positive environment."
+                        "Value lies in answer's depth, not speed. Use the tools at your disposal, multiple if you need to, to provide the best response. "
+                        "\nMaintain a respectful, helpful demeanor to foster a positive environment."
                         "If you don't know an acyronym, use the Discord_Data tool to search for it. "
                         "\nProvide links to the source of the information when possible."
                     ),
                     verbose=True,
                     allow_parallel_tool_calls=True,
+                    memory=memory,
                 )
+                memory.put(ChatMessage(content=content, role="user"))
                 chat_response = await asyncio.to_thread(chat_engine.chat, content)
                 if not chat_response or not chat_response.response:
                     await message.channel.send("There was an error processing the message." if not chat_response else "I didn't get a response.")
                     return
+                memory.put(ChatMessage(content=chat_response.response, role="assistant"))
                 response_text = chat_response.response
                 response_text = re.sub(r'^[^:]+:\s(?=[A-Z])', '', response_text)
                 await send_long_message(message, response_text)
