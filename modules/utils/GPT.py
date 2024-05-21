@@ -117,6 +117,7 @@ async def process_message_with_llm(message, client):
                     query_engine_tools,
                     system_prompt=(
                         f"You, {client.user.name}, are a Discord bot in '{message.channel.name}', facilitating OpenPilot discussions. "
+                        "\nConsider all provided facts before answering questions or forming a reply. "
                         "With a vast knowledge base, your goal is to provide comprehensive, accurate responses. "
                         "\nStrive for well-rounded answers, offering context and related information. "
                         "Value lies in answer's depth, not speed. Use the tools at your disposal, multiple if you need to, to provide the best response. "
