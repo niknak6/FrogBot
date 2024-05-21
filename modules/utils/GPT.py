@@ -106,7 +106,7 @@ query_engine_tools = [
 ]
 
 async def process_message_with_llm(message, client):
-    content = f"{message.author.name}: {message.content.replace(client.user.mention, '').strip()}"
+    content = message.content.replace(client.user.mention, '').strip()
     if content:
         try:
             async with message.channel.typing():
