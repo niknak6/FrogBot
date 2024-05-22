@@ -1,13 +1,14 @@
 # modules.utils.GPT
 
 from modules.utils.commons import send_long_message, fetch_reply_chain
-from llama_index.core import Settings, VectorStoreIndex
-from llama_index.core.tools import QueryEngineTool, ToolMetadata
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
 from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.core import Settings, VectorStoreIndex
+from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.agent import ReActAgent
 from llama_index.core.llms import ChatMessage
-from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.llms.openai import OpenAI
 from dotenv import load_dotenv
 import chromadb
@@ -23,87 +24,33 @@ Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
 chroma_db = chromadb.PersistentClient(path="./chroma_db")
 
-# Discord Data collection and tool
-discord_collection = chroma_db.get_collection("discord-data")
-discord_vector_store = ChromaVectorStore(chroma_collection=discord_collection)
-discord_index = VectorStoreIndex.from_vector_store(discord_vector_store)
-discord_engine = discord_index.as_query_engine(similarity_top_k=5)
-
-# FrogPilot Github Data collection and tool
-FrogAi_collection = chroma_db.get_collection("FrogAi-FrogPilot-data")
-FrogAi_vector_store = ChromaVectorStore(chroma_collection=FrogAi_collection)
-FrogAi_index = VectorStoreIndex.from_vector_store(FrogAi_vector_store)
-FrogAi_engine = FrogAi_index.as_query_engine(similarity_top_k=5)
-
-# NNFF Github Data collection and tool
-NNFF_collection = chroma_db.get_collection("twilsonco-openpilot-data")
-NNFF_vector_store = ChromaVectorStore(chroma_collection=NNFF_collection)
-NNFF_index = VectorStoreIndex.from_vector_store(NNFF_vector_store)
-NNFF_engine = NNFF_index.as_query_engine(similarity_top_k=5)
-
-# openpilot-docs collection and tool
-docs_collection = chroma_db.get_collection("commaai-openpilot-docs-data")
-docs_vector_store = ChromaVectorStore(chroma_collection=docs_collection)
-docs_index = VectorStoreIndex.from_vector_store(docs_vector_store)
-docs_engine = docs_index.as_query_engine(similarity_top_k=5)
-
-# comma10k collection and tool
-tenk_collection = chroma_db.get_collection("commaai-comma10k-data")
-tenk_vector_store = ChromaVectorStore(chroma_collection=tenk_collection)
-tenk_index = VectorStoreIndex.from_vector_store(tenk_vector_store)
-tenk_engine = tenk_index.as_query_engine(similarity_top_k=5)
-
-# OpenPilot wiki collection and tools
-wiki_collection = chroma_db.get_collection("wiki-data")
-wiki_vector_store = ChromaVectorStore(chroma_collection=wiki_collection)
-wiki_index = VectorStoreIndex.from_vector_store(wiki_vector_store)
-wiki_engine = wiki_index.as_query_engine(similarity_top_k=5)
-
-# Query Engine Tool
-query_engine_tools = [
-    QueryEngineTool(
-        query_engine=discord_engine,
+def create_query_engine(collection_name, tool_name, description):
+    collection = chroma_db.get_collection(collection_name)
+    vector_store = ChromaVectorStore(chroma_collection=collection)
+    index = VectorStoreIndex.from_vector_store(vector_store)
+    engine = index.as_query_engine(similarity_top_k=5)
+    tool = QueryEngineTool(
+        query_engine=engine,
         metadata=ToolMetadata(
-            name="Discord_Data",
-            description="Discord data containing information from the OpenPilot community.",
+            name=tool_name,
+            description=description,
         ),
-    ),
-    QueryEngineTool(
-        query_engine=FrogAi_engine,
-        metadata=ToolMetadata(
-            name="FrogPilot_Data",
-            description="A tool to search the FrogPilot/OpenPilot code database.",
-        ),
-    ),
-    QueryEngineTool(
-        query_engine=NNFF_engine,
-        metadata=ToolMetadata(
-            name="NNFF_Data",
-            description="The write up and breakdown of NNFF(Neural Network FeedForward) and how it works for OpenPilot.",
-        ),
-    ),
-    QueryEngineTool(
-        query_engine=docs_engine,
-        metadata=ToolMetadata(
-            name="openpilot_docs",
-            description="The official OpenPilot documentation. This DOES NOT include any code or code-related information.",
-        ),
-    ),
-    QueryEngineTool(
-        query_engine=tenk_engine,
-        metadata=ToolMetadata(
-            name="comma10k",
-            description="The comma10k, also known as 'comma pencil', dataset and information.",
-        ),
-    ),
-    QueryEngineTool(
-        query_engine=wiki_engine,
-        metadata=ToolMetadata(
-            name="openpilot_wiki",
-            description="The OpenPilot wiki data, contains some sparse but detailed information.",
-        )
     )
-]
+    return tool
+
+collections = {
+    "discord-data": {"tool_name": "Discord_Tool", "description": "Discord data containing information from the OpenPilot community."},
+    "FrogAi-FrogPilot-data": {"tool_name": "FrogPilot_Tool", "description": "A tool to search the FrogPilot/OpenPilot code database."},
+    "twilsonco-openpilot-data": {"tool_name": "NNFF_Tool", "description": "The write up and breakdown of NNFF(Neural Network FeedForward) and how it works for OpenPilot."},
+    "commaai-openpilot-docs-data": {"tool_name": "OpenPilot_Docs_Tool", "description": "The official OpenPilot documentation. This DOES NOT include any code or code-related information."},
+    "commaai-comma10k-data": {"tool_name": "Comma10k_Tool", "description": "The comma10k, also known as 'comma pencil', dataset and information."},
+    "wiki-data": {"tool_name": "Wiki_Tool", "description": "The OpenPilot wiki data, contains some sparse but detailed information."},
+    "oneclone-data": {"tool_name": "OneClone_Tool", "description": "Data from https://oneclone.net/, an online store that sells OpenPilot hardware."},
+    "springer-electronics-data": {"tool_name": "SpringerElectronics_Tool", "description": "Data from https://springerelectronics.com/, an online store that sells OpenPilot hardware."},
+    "retropilot-data": {"tool_name": "RetroPilot_Tool", "description": "Data from https://shop.retropilot.org/, an online store that sells OpenPilot hardware."},
+}
+
+query_engine_tools = [create_query_engine(name, data["tool_name"], data["description"]) for name, data in collections.items()]
 
 async def process_message_with_llm(message, client):
     content = message.content.replace(client.user.mention, '').strip()
@@ -113,20 +60,19 @@ async def process_message_with_llm(message, client):
                 reply_chain = await fetch_reply_chain(message)
                 chat_history = [ChatMessage(content=msg.content, role=msg.role) for msg in reply_chain]
                 memory = ChatMemoryBuffer.from_defaults(chat_history=chat_history, token_limit=8000)
-                chat_engine = ReActAgent.from_tools(
+                chat_engine = OpenAIAgent.from_tools(
                     query_engine_tools,
                     system_prompt=(
                         f"You, {client.user.name}, are a Discord bot in '{message.channel.name}', facilitating OpenPilot discussions. "
-                        "\nConsider all provided facts before answering questions or forming a reply. "
                         "With a vast knowledge base, your goal is to provide comprehensive, accurate responses. "
                         "\nStrive for well-rounded answers, offering context and related information. "
                         "Value lies in answer's depth, not speed. Use the tools at your disposal, multiple if you need to, to provide the best response. "
                         "\nMaintain a respectful, helpful demeanor to foster a positive environment."
-                        "If you don't know an acyronym, use the Discord_Data tool to search for it. "
+                        "If you don't know an acyronym, use the Discord_Tool tool to search for it. "
                         "\nProvide links to the source of the information when possible."
                     ),
                     verbose=True,
-                    allow_parallel_tool_calls=True,
+                    max_iterations=3,
                     memory=memory,
                 )
                 memory.put(ChatMessage(content=content, role="user"))
