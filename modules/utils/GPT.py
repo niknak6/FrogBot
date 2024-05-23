@@ -72,7 +72,7 @@ async def process_message_with_llm(message, client):
                         "\nProvide links to the source of the information when possible."
                     ),
                     verbose=True,
-                    #max_iterations=3,
+                    max_iterations=20,
                     memory=memory,
                 )
                 memory.put(ChatMessage(content=content, role="user"))
