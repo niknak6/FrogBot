@@ -33,10 +33,14 @@ async def fetch_reply_chain(message, max_tokens=4096):
     return context[::-1]
 
 async def send_message(message, content, should_reply):
-    if should_reply:
-        return await message.reply(content)
-    else:
-        return await message.channel.send(content)
+    try:
+        if should_reply:
+            return await message.reply(content)
+        else:
+            return await message.channel.send(content)
+    except Exception as e:
+        print(f"Error sending message: {e}")
+        return None
 
 def split_message(response):
     max_length = 2000
@@ -88,6 +92,8 @@ async def send_long_message(message, response, should_reply=True):
     parts = split_message(response)
     for part in parts:
         last_message = await send_message(message, part, should_reply)
+        if last_message is None:
+            break
         messages.append(last_message)
         message = last_message
     return messages
