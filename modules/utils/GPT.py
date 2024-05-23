@@ -60,7 +60,7 @@ async def process_message_with_llm(message, client):
                 reply_chain = await fetch_reply_chain(message)
                 chat_history = [ChatMessage(content=msg.content, role=msg.role) for msg in reply_chain]
                 memory = ChatMemoryBuffer.from_defaults(chat_history=chat_history, token_limit=8000)
-                chat_engine = OpenAIAgent.from_tools(
+                chat_engine = ReActAgent.from_tools(
                     query_engine_tools,
                     system_prompt=(
                         f"You, {client.user.name}, are a Discord bot in '{message.channel.name}', facilitating OpenPilot discussions. "
