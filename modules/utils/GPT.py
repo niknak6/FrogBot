@@ -60,15 +60,16 @@ async def process_message_with_llm(message, client):
                 reply_chain = await fetch_reply_chain(message)
                 chat_history = [ChatMessage(content=msg.content, role=msg.role) for msg in reply_chain]
                 memory = ChatMemoryBuffer.from_defaults(chat_history=chat_history, token_limit=8000)
+                guild_name = message.guild.name if message.guild else "Direct Message"
                 chat_engine = ReActAgent.from_tools(
                     query_engine_tools,
                     system_prompt=(
-                        f"You, {client.user.name}, are a Discord bot in '{message.channel.name}', facilitating OpenPilot discussions. "
+                        f"You, {client.user.name}, are a Discord bot in '{message.channel.name}' of the server '{guild_name}', facilitating OpenPilot discussions. "
                         "With a vast knowledge base, your goal is to provide comprehensive, accurate responses. "
                         "\nStrive for well-rounded answers, offering context and related information. "
                         "Value lies in answer's depth, not speed. Use the tools at your disposal, multiple if you need to, to provide the best response. "
                         "\nMaintain a respectful, helpful demeanor to foster a positive environment."
-                        "If you don't know an acyronym, use the Discord_Tool tool to search for it. "
+                        "If you don't know an acronym, use the Discord_Tool tool to search for it. "
                         "\nProvide links to the source of the information when possible."
                     ),
                     verbose=True,
