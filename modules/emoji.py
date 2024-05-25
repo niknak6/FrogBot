@@ -8,11 +8,8 @@ from contextlib import suppress
 import datetime
 import disnake
 import asyncio
-import pickle
-import os
 
 bot_replies = {}
-pending_interactions = {}
 
 emoji_actions = {
     "✅": "handle_checkmark_reaction",
@@ -65,9 +62,7 @@ async def handle_thumbsdown_reaction(bot, payload):
     await message.reply("We're sorry to hear that. We'll strive to do better.")
     
 async def process_close(bot, payload):
-    if payload.user_id == bot.user.id:
-        return
-    if payload.guild_id is None:
+    if payload.user_id == bot.user.id or payload.guild_id is None:
         return
     emoji_name = str(payload.emoji)
     if emoji_name not in emoji_actions:
@@ -86,25 +81,18 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
                   description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                   color=0x3498db)
     embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
-    action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes", custom_id=f"yes_{message.id}"), Button(style=ButtonStyle.danger, label="No", custom_id=f"no_{message.id}"))
+    action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes"), Button(style=ButtonStyle.danger, label="No"))
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
-    
-    pending_interactions[satisfaction_message.id] = {
-        'original_poster_id': original_poster_id,
-        'thread_id': thread_id,
-        'channel_id': payload.channel_id,
-        'message_id': message.id
-    }
-    save_bot_state(pending_interactions, 'pending_interactions.pkl')
-
+    def check(interaction: Interaction):
+        return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
     async def send_reminder():
         await asyncio.sleep(43200)
         await channel.send(f"<@{original_poster_id}>, please select an option.")
-        
     reminder_task = asyncio.create_task(send_reminder())
 
     try:
-        interaction = await bot.wait_for("button_click", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
+        interaction = await bot.wait_for("interaction", timeout=86400, check=check)
+        thread = disnake.utils.get(guild.threads, id=thread_id)
         if interaction.component.label == "Yes":
             await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             if thread:
@@ -118,8 +106,6 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     finally:
         with suppress(asyncio.CancelledError):
             reminder_task.cancel()
-        pending_interactions.pop(satisfaction_message.id, None)
-        save_bot_state(pending_interactions, 'pending_interactions.pkl')
 
 async def process_emoji_reaction(bot, payload):
     guild = bot.get_guild(payload.guild_id)
@@ -169,10 +155,13 @@ async def manage_bot_response(bot, payload, points_to_add, emoji_name):
         except disnake.NotFound:
             bot_reply_info['reply_id'] = None
     if not bot_reply_info['reply_id']:
-        bot_reply_message = await message.reply(embed=embed)
-        bot_reply_info['reply_id'] = bot_reply_message.id
+        if message.id in bot_replies:
+            bot_reply_message = await channel.fetch_message(bot_replies[message.id]['reply_id'])
+            await bot_reply_message.edit(embed=embed)
+        else:
+            bot_reply_message = await message.reply(embed=embed)
+            bot_reply_info['reply_id'] = bot_reply_message.id
     bot_replies[message.id] = {'reply_id': bot_reply_message.id, 'total_points': total_points, 'reasons': bot_reply_info['reasons']}
-    save_bot_state(bot_replies, 'bot_replies.pkl')
 
 def create_points_embed(user, total_points, reasons, emoji_name):
     title = f"Points Updated: {emoji_name}"
@@ -189,60 +178,7 @@ def create_points_embed(user, total_points, reasons, emoji_name):
     embed.set_footer(text=f"Updated on {datetime.datetime.now().strftime('%Y-%m-%d')} | '/check_points' for more info.")
     return embed
 
-def save_bot_state(state, filename):
-    with open(filename, 'wb') as f:
-        pickle.dump(state, f)
-
-def load_bot_state(filename):
-    if os.path.exists(filename):
-        with open(filename, 'rb') as f:
-            return pickle.load(f)
-    return {}
-
 def setup(client):
-    global bot_replies, pending_interactions
-    bot_replies = load_bot_state('bot_replies.pkl')
-    pending_interactions = load_bot_state('pending_interactions.pkl')
-    
     @client.event
     async def on_raw_reaction_add(payload):
         await process_reaction(client, payload)
-    
-    @client.event
-    async def on_ready():
-        for message_id, interaction_info in pending_interactions.items():
-            try:
-                channel = client.get_channel(interaction_info['channel_id'])
-                message = await channel.fetch_message(message_id)
-                # Restart interaction checks
-                asyncio.create_task(restart_interaction_check(client, interaction_info))
-            except Exception as e:
-                print(f"Failed to restart interaction for message {message_id}: {e}")
-
-async def restart_interaction_check(bot, interaction_info):
-    channel = bot.get_channel(interaction_info['channel_id'])
-    original_poster_id = interaction_info['original_poster_id']
-    thread_id = interaction_info['thread_id']
-    message_id = interaction_info['message_id']
-
-    guild = bot.get_guild(channel.guild.id)
-    thread = disnake.utils.get(guild.threads, id=thread_id)
-
-    def check(interaction):
-        return interaction.message.id == message_id and interaction.user.id == original_poster_id
-
-    try:
-        interaction = await bot.wait_for("button_click", timeout=86400, check=check)
-        if interaction.component.label == "Yes":
-            await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
-            if thread:
-                await thread.delete()
-        else:
-            await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
-    except asyncio.TimeoutError:
-        await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
-        if thread:
-            await thread.delete()
-    finally:
-        pending_interactions.pop(message_id, None)
-        save_bot_state(pending_interactions, 'pending_interactions.pkl')
