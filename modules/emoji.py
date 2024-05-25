@@ -8,6 +8,8 @@ from contextlib import suppress
 import datetime
 import disnake
 import asyncio
+import pickle
+import os
 
 bot_replies = {}
 
@@ -87,9 +89,11 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
     def check(interaction: Interaction):
         return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
+
     async def send_reminder():
         await asyncio.sleep(43200)
         await channel.send(f"<@{original_poster_id}>, please select an option.")
+        
     reminder_task = asyncio.create_task(send_reminder())
 
     try:
@@ -108,6 +112,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     finally:
         with suppress(asyncio.CancelledError):
             reminder_task.cancel()
+        save_bot_state(bot_replies)
 
 async def process_emoji_reaction(bot, payload):
     guild = bot.get_guild(payload.guild_id)
@@ -160,6 +165,7 @@ async def manage_bot_response(bot, payload, points_to_add, emoji_name):
         bot_reply_message = await message.reply(embed=embed)
         bot_reply_info['reply_id'] = bot_reply_message.id
     bot_replies[message.id] = {'reply_id': bot_reply_message.id, 'total_points': total_points, 'reasons': bot_reply_info['reasons']}
+    save_bot_state(bot_replies)
 
 def create_points_embed(user, total_points, reasons, emoji_name):
     title = f"Points Updated: {emoji_name}"
@@ -176,7 +182,20 @@ def create_points_embed(user, total_points, reasons, emoji_name):
     embed.set_footer(text=f"Updated on {datetime.datetime.now().strftime('%Y-%m-%d')} | '/check_points' for more info.")
     return embed
 
+def save_bot_state(state):
+    with open('bot_state.pkl', 'wb') as f:
+        pickle.dump(state, f)
+
+def load_bot_state():
+    if os.path.exists('bot_state.pkl'):
+        with open('bot_state.pkl', 'rb') as f:
+            return pickle.load(f)
+    return {}
+
 def setup(client):
+    global bot_replies
+    bot_replies = load_bot_state()
+    
     @client.event
     async def on_raw_reaction_add(payload):
         await process_reaction(client, payload)
