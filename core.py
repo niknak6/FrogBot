@@ -85,11 +85,14 @@ except Exception as e:
 root_dir = Path(__file__).resolve().parent
 core_script = root_dir / 'core.py'
 
-@client.slash_command(description = "Restart the bot.")
+@client.slash_command(description="Restart the bot.")
 @is_admin_or_user()
+async def restart_command(ctx):
+    await ctx.send("Restarting bot, please wait...")
+    await restart(ctx)
+
 async def restart(ctx):
     try:
-        await ctx.send("Restarting bot, please wait...")
         with open("restart_channel_id.txt", "w") as file:
             file.write(str(ctx.channel.id))
         for cmd in list(ctx.bot.all_commands.keys()):
@@ -106,7 +109,7 @@ async def restart(ctx):
     except Exception as e:
         await ctx.send(f"An error occurred while trying to restart the bot: {e}")
 
-@client.slash_command(description = "Shut down the bot.")
+@client.slash_command(description="Shut down the bot.")
 @is_admin_or_user()
 async def shutdown(ctx: disnake.ApplicationCommandInteraction):
     await ctx.response.send_message(
