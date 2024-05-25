@@ -86,12 +86,14 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
                   description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                   color=0x3498db)
     embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
-    action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes"), Button(style=ButtonStyle.danger, label="No"))
+    action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes", custom_id=f"yes_{message.id}"), Button(style=ButtonStyle.danger, label="No", custom_id=f"no_{message.id}"))
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
     
     pending_interactions[satisfaction_message.id] = {
         'original_poster_id': original_poster_id,
-        'thread_id': thread_id
+        'thread_id': thread_id,
+        'channel_id': payload.channel_id,
+        'message_id': message.id
     }
     save_bot_state(pending_interactions, 'pending_interactions.pkl')
 
@@ -212,6 +214,35 @@ def setup(client):
             try:
                 channel = client.get_channel(interaction_info['channel_id'])
                 message = await channel.fetch_message(message_id)
-                asyncio.create_task(handle_checkmark_reaction(client, None, interaction_info['original_poster_id']))
+                # Restart interaction checks
+                asyncio.create_task(restart_interaction_check(client, interaction_info))
             except Exception as e:
                 print(f"Failed to restart interaction for message {message_id}: {e}")
+
+async def restart_interaction_check(bot, interaction_info):
+    channel = bot.get_channel(interaction_info['channel_id'])
+    original_poster_id = interaction_info['original_poster_id']
+    thread_id = interaction_info['thread_id']
+    message_id = interaction_info['message_id']
+
+    guild = bot.get_guild(channel.guild.id)
+    thread = disnake.utils.get(guild.threads, id=thread_id)
+
+    def check(interaction):
+        return interaction.message.id == message_id and interaction.user.id == original_poster_id
+
+    try:
+        interaction = await bot.wait_for("button_click", timeout=86400, check=check)
+        if interaction.component.label == "Yes":
+            await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+            if thread:
+                await thread.delete()
+        else:
+            await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+    except asyncio.TimeoutError:
+        await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
+        if thread:
+            await thread.delete()
+    finally:
+        pending_interactions.pop(message_id, None)
+        save_bot_state(pending_interactions, 'pending_interactions.pkl')
