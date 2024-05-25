@@ -35,22 +35,6 @@ emoji_responses = {
     "❤️": "being a good frog"
 }
 
-def save_bot_reply(message_id, reply_id, total_points, reasons):
-    db_access_with_retry('REPLACE INTO bot_replies (message_id, reply_id, total_points, reasons) VALUES (?, ?, ?, ?)', 
-                         (message_id, reply_id, total_points, ','.join(reasons)))
-
-def load_bot_replies():
-    replies = db_access_with_retry('SELECT * FROM bot_replies', ())
-    bot_replies = {}
-    for reply in replies:
-        message_id, reply_id, total_points, reasons = reply
-        bot_replies[message_id] = {
-            'reply_id': reply_id,
-            'total_points': total_points,
-            'reasons': reasons.split(',')
-        }
-    return bot_replies
-
 async def handle_thumbsup_reaction(bot, payload):
     channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
@@ -78,9 +62,7 @@ async def handle_thumbsdown_reaction(bot, payload):
     await message.reply("We're sorry to hear that. We'll strive to do better.")
     
 async def process_close(bot, payload):
-    if payload.user_id == bot.user.id:
-        return
-    if payload.guild_id is None:
+    if payload.user_id == bot.user.id or payload.guild_id is None:
         return
     emoji_name = str(payload.emoji)
     if emoji_name not in emoji_actions:
@@ -173,10 +155,13 @@ async def manage_bot_response(bot, payload, points_to_add, emoji_name):
         except disnake.NotFound:
             bot_reply_info['reply_id'] = None
     if not bot_reply_info['reply_id']:
-        bot_reply_message = await message.reply(embed=embed)
-        bot_reply_info['reply_id'] = bot_reply_message.id
+        if message.id in bot_replies:
+            bot_reply_message = await channel.fetch_message(bot_replies[message.id]['reply_id'])
+            await bot_reply_message.edit(embed=embed)
+        else:
+            bot_reply_message = await message.reply(embed=embed)
+            bot_reply_info['reply_id'] = bot_reply_message.id
     bot_replies[message.id] = {'reply_id': bot_reply_message.id, 'total_points': total_points, 'reasons': bot_reply_info['reasons']}
-    save_bot_reply(message.id, bot_reply_message.id, total_points, bot_reply_info['reasons'])
 
 def create_points_embed(user, total_points, reasons, emoji_name):
     title = f"Points Updated: {emoji_name}"
@@ -194,12 +179,6 @@ def create_points_embed(user, total_points, reasons, emoji_name):
     return embed
 
 def setup(client):
-    @client.event
-    async def on_ready():
-        global bot_replies
-        bot_replies = load_bot_replies()
-        print("Bot replies loaded from database.")
-
     @client.event
     async def on_raw_reaction_add(payload):
         await process_reaction(client, payload)
