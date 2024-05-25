@@ -1,6 +1,6 @@
 # modules.emoji
 
-from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelType
+from disnake import Button, ButtonStyle, ActionRow, Embed, ChannelType
 from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
 from contextlib import suppress
@@ -103,8 +103,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
         'original_poster_id': original_poster_id,
         'thread_id': thread_id,
         'channel_id': payload.channel_id,
-        'message_id': message.id,
-        'satisfaction_message_id': satisfaction_message.id
+        'message_id': message.id
     }
     save_pending_interactions(pending_interactions)
 
@@ -115,7 +114,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     reminder_task = asyncio.create_task(send_reminder())
 
     try:
-        interaction = await bot.wait_for("interaction", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
+        interaction = await bot.wait_for("button_click", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
         if interaction.component.label == "Yes":
             await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             if thread:
@@ -217,12 +216,11 @@ def setup(client):
                 original_poster_id = interaction_info['original_poster_id']
                 thread_id = interaction_info['thread_id']
                 message_id = interaction_info['message_id']
-                satisfaction_message_id = interaction_info['satisfaction_message_id']
-                asyncio.create_task(repost_resolution_message(client, channel, original_poster_id, thread_id, message_id, satisfaction_message_id))
+                asyncio.create_task(repost_resolution_message(client, channel, original_poster_id, thread_id, message_id))
             except Exception as e:
                 print(f"Failed to restart interaction for message {interaction_id}: {e}")
 
-async def repost_resolution_message(bot, channel, original_poster_id, thread_id, message_id, satisfaction_message_id):
+async def repost_resolution_message(bot, channel, original_poster_id, thread_id, message_id):
     guild = bot.get_guild(channel.guild.id)
     thread = disnake.utils.get(guild.threads, id=thread_id) if thread_id else None
 
@@ -238,8 +236,7 @@ async def repost_resolution_message(bot, channel, original_poster_id, thread_id,
         'original_poster_id': original_poster_id,
         'thread_id': thread_id,
         'channel_id': channel.id,
-        'message_id': message_id,
-        'satisfaction_message_id': satisfaction_message.id
+        'message_id': message_id
     }
     save_pending_interactions(pending_interactions)
 
@@ -250,7 +247,7 @@ async def repost_resolution_message(bot, channel, original_poster_id, thread_id,
     reminder_task = asyncio.create_task(send_reminder())
 
     try:
-        interaction = await bot.wait_for("interaction", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
+        interaction = await bot.wait_for("button_click", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
         if interaction.component.label == "Yes":
             await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             if thread:
