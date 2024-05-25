@@ -29,3 +29,4 @@ local_nodes/
 DiscordDocs/
 docstore/
 qdrant_db/
+db_files/

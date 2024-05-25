@@ -3,19 +3,21 @@
 from llama_index.core import VectorStoreIndex, Settings, StorageContext, SimpleDirectoryReader
 from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.vector_stores.duckdb import DuckDBVectorStore
 from llama_index.readers.web import WholeSiteReader
 from dotenv import load_dotenv
 from tqdm import tqdm
-import chromadb
 import httpx
+import torch
 import sys
 import os
 
 load_dotenv()
 github_client = GithubClient(os.getenv('GITHUB_TOKEN'))
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
-chroma_db = chromadb.PersistentClient(path="./chroma_db")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print("GPU available:", torch.cuda.is_available())
+Settings.embed_model = HuggingFaceEmbedding(model_name="avsolatorio/NoInstruct-small-Embedding-v0", device=device)
+embed_dim=384
 
 '''DISCORD DATA'''
 print("Loading local files...")
@@ -24,8 +26,7 @@ reader = SimpleDirectoryReader(input_dir=dir_path, required_exts=[".txt"])
 discord_docs = reader.load_data()
 
 print("Local files loaded successfully. Setting up vector store for Discord data...")
-discord_collection = chroma_db.get_or_create_collection("discord-data")
-discord_vector_store = ChromaVectorStore(chroma_collection=discord_collection)
+discord_vector_store = DuckDBVectorStore(database_name="discord.duckdb", embed_dim=embed_dim, persist_dir="./db_files/")
 discord_storage_context = StorageContext.from_defaults(vector_store=discord_vector_store)
 
 discord_index = VectorStoreIndex.from_documents(discord_docs, storage_context=discord_storage_context, show_progress=True)
@@ -40,8 +41,7 @@ wiki = scraper.load_data(
 )
 
 print("Wiki data downloaded successfully. Setting up vector store for wiki...")
-wiki_collection = chroma_db.get_or_create_collection("wiki-data")
-wiki_vector_store = ChromaVectorStore(chroma_collection=wiki_collection)
+wiki_vector_store = DuckDBVectorStore(database_name="wiki.duckdb", embed_dim=embed_dim, persist_dir="./db_files/")
 wiki_storage_context = StorageContext.from_defaults(vector_store=wiki_vector_store)
 
 wiki_index = VectorStoreIndex.from_documents(wiki, storage_context=wiki_storage_context, show_progress=True)
@@ -56,8 +56,7 @@ retropilot_data = retropilot_scraper.load_data(
 )
 
 print("RetroPilot data downloaded successfully. Setting up vector store for RetroPilot...")
-retropilot_collection = chroma_db.get_or_create_collection("retropilot-data")
-retropilot_vector_store = ChromaVectorStore(chroma_collection=retropilot_collection)
+retropilot_vector_store = DuckDBVectorStore(database_name="retropilot.duckdb", embed_dim=embed_dim, persist_dir="./db_files/")
 retropilot_storage_context = StorageContext.from_defaults(vector_store=retropilot_vector_store)
 
 retropilot_index = VectorStoreIndex.from_documents(retropilot_data, storage_context=retropilot_storage_context, show_progress=True)
@@ -72,8 +71,7 @@ oneclone_data = oneclone_scraper.load_data(
 )
 
 print("OneClone data downloaded successfully. Setting up vector store for OneClone...")
-oneclone_collection = chroma_db.get_or_create_collection("oneclone-data")
-oneclone_vector_store = ChromaVectorStore(chroma_collection=oneclone_collection)
+oneclone_vector_store = DuckDBVectorStore(database_name="oneclone.duckdb", embed_dim=embed_dim, persist_dir="./db_files/")
 oneclone_storage_context = StorageContext.from_defaults(vector_store=oneclone_vector_store)
 
 oneclone_index = VectorStoreIndex.from_documents(oneclone_data, storage_context=oneclone_storage_context, show_progress=True)
@@ -88,8 +86,7 @@ springer_data = springer_scraper.load_data(
 )
 
 print("Springer Electronics data downloaded successfully. Setting up vector store for Springer Electronics...")
-springer_collection = chroma_db.get_or_create_collection("springer-electronics-data")
-springer_vector_store = ChromaVectorStore(chroma_collection=springer_collection)
+springer_vector_store = DuckDBVectorStore(database_name="springer.duckdb", embed_dim=embed_dim, persist_dir="./db_files/")
 springer_storage_context = StorageContext.from_defaults(vector_store=springer_vector_store)
 
 springer_index = VectorStoreIndex.from_documents(springer_data, storage_context=springer_storage_context, show_progress=True)
@@ -107,9 +104,9 @@ repos_config = [
     {
         "owner": "commaai",
         "repo": "openpilot-docs",
-        "branch": "master",
+        "branch": "gh-pages",
         "filter_directories": (["docs"], GithubRepositoryReader.FilterType.INCLUDE),
-        "filter_file_extensions": ([".md"], GithubRepositoryReader.FilterType.INCLUDE),
+        "filter_file_extensions": ([".s"], GithubRepositoryReader.FilterType.EXCLUDE),
     },
     {
         "owner": "commaai",
@@ -143,8 +140,7 @@ for config in tqdm(repos_config, desc="Loading documents from repositories"):
         documents = loader.load_data(branch=config["branch"])
 
         print(f"{config['owner']}/{config['repo']} data downloaded successfully. Setting up vector store...")
-        github_collection = chroma_db.create_collection(f"{config['owner']}-{config['repo']}-data")
-        github_vector_store = ChromaVectorStore(chroma_collection=github_collection)
+        github_vector_store = DuckDBVectorStore(database_name=f"{config['owner']}-{config['repo']}.duckdb", embed_dim=embed_dim, persist_dir="./db_files/")
         github_storage_context = StorageContext.from_defaults(vector_store=github_vector_store)
 
         github_index = VectorStoreIndex.from_documents(documents, storage_context=github_storage_context, show_progress=True)
