@@ -131,11 +131,13 @@ async def shutdown_listener(inter: disnake.MessageInteraction):
 
 @client.slash_command(description = "Update the bot from the Git repository.")
 @is_admin_or_user()
-async def update(ctx, branch="beta"):
+async def update(ctx, branch="beta", post_update_action=None):
     try:
         await switch_branch(ctx, branch)
         await git_stash(ctx)
         await git_pull_origin(ctx, branch)
+        if post_update_action == 'restart':
+            await restart(ctx)
     except Exception as e:
         await ctx.send(f'Error updating the script: {e}')
 

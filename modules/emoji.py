@@ -3,7 +3,6 @@
 from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelType
 from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
-from disnake.ui import Button, ActionRow
 from contextlib import suppress
 import datetime
 import disnake
@@ -89,9 +88,9 @@ async def process_close(bot, payload):
 async def handle_checkmark_reaction(bot, payload, original_poster_id):
     channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
-    thread_id = message.thread.id
+    thread_id = message.thread.id if message.thread else None
     guild = bot.get_guild(payload.guild_id)
-    thread = disnake.utils.get(guild.threads, id=thread_id)
+    thread = disnake.utils.get(guild.threads, id=thread_id) if thread_id else None
     embed = Embed(title="Resolution of Request/Report",
                   description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                   color=0x3498db)
@@ -104,7 +103,8 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
         'original_poster_id': original_poster_id,
         'thread_id': thread_id,
         'channel_id': payload.channel_id,
-        'message_id': message.id
+        'message_id': message.id,
+        'satisfaction_message_id': satisfaction_message.id
     }
     save_pending_interactions(pending_interactions)
 
@@ -115,7 +115,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     reminder_task = asyncio.create_task(send_reminder())
 
     try:
-        interaction = await bot.wait_for("button_click", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
+        interaction = await bot.wait_for("interaction", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
         if interaction.component.label == "Yes":
             await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             if thread:
@@ -211,22 +211,20 @@ def setup(client):
     @client.event
     async def on_ready():
         pending_interactions = load_pending_interactions()
-        for message_id, interaction_info in pending_interactions.items():
+        for interaction_id, interaction_info in pending_interactions.items():
             try:
                 channel = client.get_channel(interaction_info['channel_id'])
-                message = await channel.fetch_message(message_id)
-                asyncio.create_task(repost_resolution_message(client, interaction_info))
+                original_poster_id = interaction_info['original_poster_id']
+                thread_id = interaction_info['thread_id']
+                message_id = interaction_info['message_id']
+                satisfaction_message_id = interaction_info['satisfaction_message_id']
+                asyncio.create_task(repost_resolution_message(client, channel, original_poster_id, thread_id, message_id, satisfaction_message_id))
             except Exception as e:
-                print(f"Failed to restart interaction for message {message_id}: {e}")
+                print(f"Failed to restart interaction for message {interaction_id}: {e}")
 
-async def repost_resolution_message(bot, interaction_info):
-    channel = bot.get_channel(interaction_info['channel_id'])
-    original_poster_id = interaction_info['original_poster_id']
-    thread_id = interaction_info['thread_id']
-    message_id = interaction_info['message_id']
-
+async def repost_resolution_message(bot, channel, original_poster_id, thread_id, message_id, satisfaction_message_id):
     guild = bot.get_guild(channel.guild.id)
-    thread = disnake.utils.get(guild.threads, id=thread_id)
+    thread = disnake.utils.get(guild.threads, id=thread_id) if thread_id else None
 
     embed = Embed(title="Resolution of Request/Report",
                   description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
@@ -235,6 +233,16 @@ async def repost_resolution_message(bot, interaction_info):
     action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes", custom_id=f"yes_{message_id}"), Button(style=ButtonStyle.danger, label="No", custom_id=f"no_{message_id}"))
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
     
+    pending_interactions = load_pending_interactions()
+    pending_interactions[satisfaction_message.id] = {
+        'original_poster_id': original_poster_id,
+        'thread_id': thread_id,
+        'channel_id': channel.id,
+        'message_id': message_id,
+        'satisfaction_message_id': satisfaction_message.id
+    }
+    save_pending_interactions(pending_interactions)
+
     async def send_reminder():
         await asyncio.sleep(43200)
         await channel.send(f"<@{original_poster_id}>, please select an option.")
@@ -242,7 +250,7 @@ async def repost_resolution_message(bot, interaction_info):
     reminder_task = asyncio.create_task(send_reminder())
 
     try:
-        interaction = await bot.wait_for("button_click", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
+        interaction = await bot.wait_for("interaction", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
         if interaction.component.label == "Yes":
             await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             if thread:
@@ -256,6 +264,5 @@ async def repost_resolution_message(bot, interaction_info):
     finally:
         with suppress(asyncio.CancelledError):
             reminder_task.cancel()
-        pending_interactions = load_pending_interactions()
-        pending_interactions.pop(message_id, None)
+        pending_interactions.pop(satisfaction_message.id, None)
         save_pending_interactions(pending_interactions)
