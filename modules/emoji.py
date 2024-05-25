@@ -8,8 +8,11 @@ from contextlib import suppress
 import datetime
 import disnake
 import asyncio
+import json
+import os
 
 bot_replies = {}
+pending_interactions_file = 'pending_interactions.json'
 
 emoji_actions = {
     "✅": "handle_checkmark_reaction",
@@ -34,6 +37,16 @@ emoji_responses = {
     "🧠": "making sure it was well-thought-out",
     "❤️": "being a good frog"
 }
+
+def load_pending_interactions():
+    if os.path.exists(pending_interactions_file):
+        with open(pending_interactions_file, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_pending_interactions(interactions):
+    with open(pending_interactions_file, 'w') as f:
+        json.dump(interactions, f)
 
 async def handle_thumbsup_reaction(bot, payload):
     channel = bot.get_channel(payload.channel_id)
@@ -62,7 +75,9 @@ async def handle_thumbsdown_reaction(bot, payload):
     await message.reply("We're sorry to hear that. We'll strive to do better.")
     
 async def process_close(bot, payload):
-    if payload.user_id == bot.user.id or payload.guild_id is None:
+    if payload.user_id == bot.user.id:
+        return
+    if payload.guild_id is None:
         return
     emoji_name = str(payload.emoji)
     if emoji_name not in emoji_actions:
@@ -81,18 +96,26 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
                   description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
                   color=0x3498db)
     embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
-    action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes"), Button(style=ButtonStyle.danger, label="No"))
+    action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes", custom_id=f"yes_{message.id}"), Button(style=ButtonStyle.danger, label="No", custom_id=f"no_{message.id}"))
     satisfaction_message = await channel.send(embed=embed, components=[action_row])
-    def check(interaction: Interaction):
-        return interaction.message.id == satisfaction_message.id and interaction.user.id == original_poster_id
+    
+    pending_interactions = load_pending_interactions()
+    pending_interactions[satisfaction_message.id] = {
+        'original_poster_id': original_poster_id,
+        'thread_id': thread_id,
+        'channel_id': payload.channel_id,
+        'message_id': message.id
+    }
+    save_pending_interactions(pending_interactions)
+
     async def send_reminder():
         await asyncio.sleep(43200)
         await channel.send(f"<@{original_poster_id}>, please select an option.")
+        
     reminder_task = asyncio.create_task(send_reminder())
 
     try:
-        interaction = await bot.wait_for("interaction", timeout=86400, check=check)
-        thread = disnake.utils.get(guild.threads, id=thread_id)
+        interaction = await bot.wait_for("button_click", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
         if interaction.component.label == "Yes":
             await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             if thread:
@@ -106,6 +129,8 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     finally:
         with suppress(asyncio.CancelledError):
             reminder_task.cancel()
+        pending_interactions.pop(satisfaction_message.id, None)
+        save_pending_interactions(pending_interactions)
 
 async def process_emoji_reaction(bot, payload):
     guild = bot.get_guild(payload.guild_id)
@@ -182,3 +207,55 @@ def setup(client):
     @client.event
     async def on_raw_reaction_add(payload):
         await process_reaction(client, payload)
+    
+    @client.event
+    async def on_ready():
+        pending_interactions = load_pending_interactions()
+        for message_id, interaction_info in pending_interactions.items():
+            try:
+                channel = client.get_channel(interaction_info['channel_id'])
+                message = await channel.fetch_message(message_id)
+                asyncio.create_task(repost_resolution_message(client, interaction_info))
+            except Exception as e:
+                print(f"Failed to restart interaction for message {message_id}: {e}")
+
+async def repost_resolution_message(bot, interaction_info):
+    channel = bot.get_channel(interaction_info['channel_id'])
+    original_poster_id = interaction_info['original_poster_id']
+    thread_id = interaction_info['thread_id']
+    message_id = interaction_info['message_id']
+
+    guild = bot.get_guild(channel.guild.id)
+    thread = disnake.utils.get(guild.threads, id=thread_id)
+
+    embed = Embed(title="Resolution of Request/Report",
+                  description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
+                  color=0x3498db)
+    embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
+    action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes", custom_id=f"yes_{message_id}"), Button(style=ButtonStyle.danger, label="No", custom_id=f"no_{message_id}"))
+    satisfaction_message = await channel.send(embed=embed, components=[action_row])
+    
+    async def send_reminder():
+        await asyncio.sleep(43200)
+        await channel.send(f"<@{original_poster_id}>, please select an option.")
+        
+    reminder_task = asyncio.create_task(send_reminder())
+
+    try:
+        interaction = await bot.wait_for("button_click", timeout=86400, check=lambda i: i.message.id == satisfaction_message.id and i.user.id == original_poster_id)
+        if interaction.component.label == "Yes":
+            await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+            if thread:
+                await thread.delete()
+        else:
+            await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+    except asyncio.TimeoutError:
+        await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
+        if thread:
+            await thread.delete()
+    finally:
+        with suppress(asyncio.CancelledError):
+            reminder_task.cancel()
+        pending_interactions = load_pending_interactions()
+        pending_interactions.pop(message_id, None)
+        save_pending_interactions(pending_interactions)
