@@ -124,10 +124,10 @@ async def shutdown_listener(inter: disnake.MessageInteraction):
     if inter.component.custom_id not in ["shutdown_yes", "shutdown_no"]:
         return
     if inter.component.custom_id == "shutdown_yes":
-        await inter.response.send_message("Shutting down...", ephemeral=True)
+        await inter.response.edit_message(content="Shutting down...")
         await inter.bot.close()
     elif inter.component.custom_id == "shutdown_no":
-        await inter.response.send_message("Bot shutdown canceled.", ephemeral=True)
+        await inter.response.edit_message(content="Bot shutdown canceled.")
 
 @client.slash_command(description = "Update the bot from the Git repository.")
 @is_admin_or_user()
