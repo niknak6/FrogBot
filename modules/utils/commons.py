@@ -20,7 +20,7 @@ async def fetch_reply_chain(message, max_tokens=4096):
         try:
             message = await message.channel.fetch_message(message.reference.message_id)
             role = Role.ASSISTANT if message.author.bot else Role.USER
-            message_content = f"{message.content}\n"
+            message_content = f"{message.author.name}: {message.content}\n"
             message_tokens = len(message_content) // 4
             if tokens_used + message_tokens <= max_tokens:
                 context.append(HistoryChatMessage(message_content, role))
@@ -49,32 +49,22 @@ def split_message(response):
     code_block_type = None
     while len(response) > max_length:
         split_index = response.rfind('\n', 0, max_length)
-        split_index = max_length - 1 if split_index == -1 else split_index
-        code_block_start = response.rfind('```', 0, split_index)
-        if code_block_start != -1:
-            newline_after_code_block_start = response.find('\n', code_block_start)
-            if newline_after_code_block_start != -1 and newline_after_code_block_start < split_index:
-                code_block_type = response[code_block_start+3:newline_after_code_block_start].strip()
-            code_block_end = response.find('```', code_block_start + 3)
-            if code_block_end == -1 or code_block_end > split_index:
-                if response[:split_index+1].count('```') % 2 != 0:
-                    part = response[:split_index+1] + '```'
-                    response = '```' + (code_block_type + '\n' if code_block_type else '') + response[split_index+1:].lstrip()
-                else:
-                    part = response[:split_index+1]
-                    response = response[split_index+1:].lstrip()
-            else:
-                part = response[:split_index+1]
-                response = response[split_index+1:].lstrip()
+        split_index = max_length if split_index == -1 else split_index
+        part = response[:split_index]
+        code_block_start = part.rfind('```')
+        code_block_end = part.rfind('```', code_block_start + 3)
+        if code_block_start != -1 and (code_block_end == -1 or code_block_end < code_block_start):
+            code_block_type = part[code_block_start + 3:].split('\n', 1)[0]
+            part += '```'
+            response = '```' + (code_block_type + '\n' if code_block_type else '') + response[split_index:].lstrip()
         else:
-            part = response[:split_index+1]
-            response = response[split_index+1:].lstrip()
+            response = response[split_index:].lstrip()
         for char in markdown_chars:
             if part.count(char) % 2 != 0 and not part.endswith('```'):
                 part += char
                 response = char + response
-        parts.append(part.rstrip())
-    parts.append(response.rstrip())
+        parts.append(part)
+    parts.append(response)
     return parts
 
 async def send_long_message(message, response, should_reply=True):
