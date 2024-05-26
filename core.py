@@ -123,7 +123,7 @@ async def update(ctx: disnake.ApplicationCommandInteraction, branch="beta", rest
         await pull_proc.wait()
         await ctx.send('Update process completed.')
         if restart:
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
             await restart_bot(ctx)
     except Exception as e:
         await ctx.send(f'Error updating the script: {e}')
