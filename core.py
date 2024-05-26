@@ -166,7 +166,11 @@ async def on_ready():
     print(f'Logged in as {client.user.name}')
     try:
         with open('restart_channel_id.txt', 'r') as f:
-            restart_channel_id = int(f.read().strip())
+            content = f.read().strip()
+            if content:
+                restart_channel_id = int(content)
+            else:
+                restart_channel_id = None
     except FileNotFoundError:
         restart_channel_id = None
     try:

@@ -101,7 +101,7 @@ async def process_message_with_llm(message, client):
                     f"User: '{message.author}'.\n"
                     "As an OpenPilot community assistant, your role is to provide accurate information and support.\n"
                     "Remember to check the context of the conversation and provide the best response possible.\n"
-                    "Avoid instructing the user to edit code unless they're discussing code. Instead, provide a basic understanding and use your tools to locate the settings in the GUI.\n"
+                    "Avoid instructing the user to edit or interact with code unless they're specifically asking about code. However, you should still examine the code to find answers, especially when the settings table is in code and needs to be read to guide users about the GUI.\n"
                 )
                 system_prompt += channel_prompts.get(message.channel.name, channel_prompts['default'])
                 print("System Prompt:", system_prompt)
