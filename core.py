@@ -139,34 +139,48 @@ async def pull_changes(ctx, branch):
     await pull_proc.communicate()
     return pull_proc, pull_message
 
-async def restart_bot(ctx):
-    await ctx.send("Restarting bot, please wait...")
-    with open("restart_channel_id.txt", "w") as file:
-        file.write(str(ctx.channel.id))
-    for cmd in list(ctx.bot.all_commands.keys()):
-        ctx.bot.remove_command(cmd)
-    await asyncio.sleep(3)
-    subprocess.Popen([sys.executable, str(core_script)])
-    await asyncio.sleep(2)
-    await ctx.bot.close()
-    os._exit(0)
+def save_restart_channel_id():
+    with open('restart_channel_id.txt', 'w') as f:
+        f.write(str(restart_channel_id))
 
-'''This code defines the core functionality of the bot, including event handlers for when the bot is ready, when a message is received, when a reaction is added, and when a command error occurs, as well as a method to process commands.'''
+def load_restart_channel_id():
+    try:
+        with open('restart_channel_id.txt', 'r') as f:
+            return int(f.read().strip())
+    except FileNotFoundError:
+        return None
+
+async def restart_bot(ctx):
+    global restart_channel_id
+    try:
+        await ctx.send("Restarting bot, please wait...")
+        restart_channel_id = ctx.channel.id
+        save_restart_channel_id()
+        for cmd in list(ctx.bot.all_commands.keys()):
+            ctx.bot.remove_command(cmd)
+        await asyncio.sleep(3)
+        subprocess.Popen([sys.executable, str(core_script)])
+        await asyncio.sleep(2)
+        await ctx.bot.close()
+        os._exit(0)
+    except Exception as e:
+        await ctx.send(f"Error restarting the bot: {e}")
+
 @client.event
 async def on_ready():
+    global restart_channel_id
     await initialize_database()
     await check_user_points(client)
     await client.change_presence(activity=disnake.Game(name=f"/help | {bot_version}"))
     print(f'Logged in as {client.user.name}')
+    restart_channel_id = load_restart_channel_id()
     try:
-        with open("restart_channel_id.txt", "r") as file:
-            channel_id = int(file.read().strip())
-            channel = client.get_channel(channel_id)
+        if restart_channel_id:
+            channel = client.get_channel(restart_channel_id)
             if channel:
                 await channel.send("I'm back online!")
-            os.remove("restart_channel_id.txt")
-    except FileNotFoundError:
-        pass
+            restart_channel_id = None
+            save_restart_channel_id()
     except Exception as e:
         print(f"Error sending restart message: {e}")
 
