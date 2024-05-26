@@ -105,9 +105,13 @@ async def process_message_with_llm(message, client):
                 )
                 bug_reports_forum_channel_id = 1162100167110053888
                 parent_channel_id = message.channel.parent_id
-                if parent_channel_id == bug_reports_forum_channel_id:
-                    system_prompt += channel_prompts['bug-reports']
+                if parent_channel_id is not None:
+                    if parent_channel_id == bug_reports_forum_channel_id:
+                        system_prompt += channel_prompts['bug-reports']
+                    else:
+                        system_prompt += channel_prompts['default']
                 else:
+                    print("No Parent Channel ID available")
                     system_prompt += channel_prompts['default']
                 print("Parent Channel ID:", parent_channel_id)
                 print("System Prompt:", system_prompt)
