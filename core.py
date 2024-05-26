@@ -87,7 +87,7 @@ core_script = root_dir / 'core.py'
 
 @client.slash_command(description = "Restart the bot.")
 @is_admin_or_user()
-async def restart_bot(ctx):
+async def restart(ctx):
     try:
         await restart(ctx)
     except PermissionError:
