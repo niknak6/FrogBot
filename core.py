@@ -102,8 +102,10 @@ async def restart(ctx):
 async def update(ctx, branch="beta", restart_after_update=False):
     try:
         await switch_branch(ctx, branch)
-        await git_stash(ctx)
-        await git_pull_origin(ctx, branch)
+        stash_message = await ctx.send('Stashing changes...')
+        await git_stash(ctx, stash_message)
+        pull_message = await ctx.send('Pulling changes...')
+        await git_pull_origin(ctx, branch, pull_message)
         if restart_after_update:
             await restart(ctx)
     except Exception as e:
@@ -119,18 +121,18 @@ async def switch_branch(ctx, branch):
         await ctx.send(f"Switching to branch {branch}")
         await asyncio.create_subprocess_exec("git", "checkout", branch)
 
-async def git_stash(ctx):
+async def git_stash(ctx, message):
     stash_proc = await asyncio.create_subprocess_exec("git", "stash")
     await stash_proc.communicate()
-    await ctx.send('Changes stashed successfully.')
+    await message.edit(content='Changes stashed successfully.')
 
-async def git_pull_origin(ctx, branch):
+async def git_pull_origin(ctx, branch, message):
     pull_proc = await asyncio.create_subprocess_exec(
         'git', 'pull', 'origin', branch,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     _, stderr = await pull_proc.communicate()
     if pull_proc.returncode == 0:
-        await ctx.send('Git pull successful.')
+        await message.edit(content='Git pull successful.')
     else:
         raise Exception(stderr.decode())
 
