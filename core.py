@@ -110,10 +110,8 @@ async def update_status_message(status_message, new_content):
 @client.slash_command(description="Update the bot from the Git repository.")
 @is_admin_or_user()
 async def update(ctx, branch="beta", restart_after_update=False):
-    status_message = None
     try:
-        await ctx.send('Starting update process...')
-        status_message = ctx.message
+        status_message = await ctx.send('Starting update process...')
         current_branch_proc = await asyncio.create_subprocess_exec(
             "git", "rev-parse", "--abbrev-ref", "HEAD", stdout=asyncio.subprocess.PIPE)
         stdout, _ = await current_branch_proc.communicate()
