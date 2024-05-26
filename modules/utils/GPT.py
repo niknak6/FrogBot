@@ -103,14 +103,13 @@ async def process_message_with_llm(message, client):
                     "Remember to check the context of the conversation and provide the best response possible.\n"
                     "Avoid instructing the user to edit or interact with code unless they're specifically asking about code. However, you should still examine the code to find answers, especially when the settings table is in code and needs to be read to guide users about the GUI.\n"
                 )
-                channel = client.get_channel(1162100167110053888)
-                print("Channel2:", channel)
-                category = channel.category
-                print("Category:", category)
-                if category and category.name == 'bug-reports':
+                bug_reports_forum_channel_id = 1162100167110053888
+                parent_channel_id = message.channel.parent_id
+                if parent_channel_id == bug_reports_forum_channel_id:
                     system_prompt += channel_prompts['bug-reports']
                 else:
                     system_prompt += channel_prompts['default']
+                print("Parent Channel ID:", parent_channel_id)
                 print("System Prompt:", system_prompt)
                 chat_engine = ReActAgent.from_tools(
                     query_engine_tools,
