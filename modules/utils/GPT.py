@@ -103,8 +103,8 @@ async def process_message_with_llm(message, client):
                     "Remember to check the context of the conversation and provide the best response possible.\n"
                     "Avoid instructing the user to edit or interact with code unless they're specifically asking about code. However, you should still examine the code to find answers, especially when the settings table is in code and needs to be read to guide users about the GUI.\n"
                 )
-                category = message.channel.category
-                print("Category:", category.name)
+                channel = client.get_channel(1162100167110053888)
+                category = channel.category
                 if category and category.name == 'bug-reports':
                     system_prompt += channel_prompts['bug-reports']
                 else:
