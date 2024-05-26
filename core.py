@@ -99,7 +99,7 @@ async def restart(ctx):
 
 @client.slash_command(description="Update the bot from the Git repository.")
 @is_admin_or_user()
-async def update(ctx: disnake.ApplicationCommandInteraction, branch="beta", restart_after_update=False):
+async def update(ctx: disnake.ApplicationCommandInteraction, branch="beta", restart=False):
     try:
         current_branch_proc = await asyncio.create_subprocess_exec(
             "git", "rev-parse", "--abbrev-ref", "HEAD", stdout=asyncio.subprocess.PIPE)
@@ -120,7 +120,7 @@ async def update(ctx: disnake.ApplicationCommandInteraction, branch="beta", rest
             error_msg = pull_stderr.decode()
             await ctx.send(f'Git pull failed: {error_msg}')
             return
-        if restart_after_update:
+        if restart:
             await restart_bot(ctx)
     except Exception as e:
         await ctx.send(f'Error updating the script: {e}')
