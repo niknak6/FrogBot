@@ -30,3 +30,4 @@ DiscordDocs/
 docstore/
 qdrant_db/
 db_files/
+.fleet/settings.json
