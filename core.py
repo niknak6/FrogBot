@@ -121,24 +121,12 @@ async def update(ctx: disnake.ApplicationCommandInteraction, branch="beta", rest
             await ctx.send(f'Git pull failed: {error_msg}')
             return
         await pull_proc.wait()
+        await ctx.send('Update process completed.')
         if restart:
+            await asyncio.sleep(1)
             await restart_bot(ctx)
     except Exception as e:
         await ctx.send(f'Error updating the script: {e}')
-    else:
-        await ctx.send('Update process completed.')
-
-async def stash_changes(ctx):
-    stash_message = await ctx.send('Stashing changes...')
-    stash_proc = await asyncio.create_subprocess_exec("git", "stash")
-    await stash_proc.communicate()
-    return stash_proc, stash_message
-
-async def pull_changes(ctx, branch):
-    pull_message = await ctx.send('Pulling changes...')
-    pull_proc = await asyncio.create_subprocess_exec('git', 'pull', 'origin', branch, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-    await pull_proc.communicate()
-    return pull_proc, pull_message
 
 async def restart_bot(ctx):
     global restart_channel_id
