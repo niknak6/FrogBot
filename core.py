@@ -105,7 +105,7 @@ async def update(ctx, branch="beta", restart_after_update=False):
         await git_stash(ctx)
         await git_pull_origin(ctx, branch)
         if restart_after_update:
-            await restart_bot(ctx)
+            await restart(ctx)
     except Exception as e:
         await ctx.send(f'Error updating the script: {e}')
 
