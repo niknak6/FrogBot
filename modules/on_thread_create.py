@@ -36,8 +36,16 @@ async def on_thread_create(thread):
     try:
         await asyncio.sleep(1)
         emojis_to_add = EMOJI_MAP.get(thread.parent_id, [])
-        async for message in thread.history(limit=1):
-            await asyncio.gather(*(add_reaction(message, emoji) for emoji in emojis_to_add))
+
+        first_message = None
+        async for message in thread.history(limit=None):
+            if first_message is None:
+                first_message = message
+
+            if message.author == message.author.bot:
+                break
+
+        await asyncio.gather(*(add_reaction(first_message, emoji) for emoji in emojis_to_add))
         
         if thread.parent_id == 1162100167110053888:
             original_message = await thread.fetch_message(thread.id)
