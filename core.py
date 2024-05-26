@@ -120,6 +120,7 @@ async def update(ctx: disnake.ApplicationCommandInteraction, branch="beta", rest
             error_msg = pull_stderr.decode()
             await ctx.send(f'Git pull failed: {error_msg}')
             return
+        await pull_proc.wait()
         if restart:
             await restart_bot(ctx)
     except Exception as e:
