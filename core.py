@@ -98,6 +98,10 @@ async def restart(ctx):
         await ctx.send(f"An error occurred while trying to restart the bot: {e}")
 
 async def update_status_message(status_message, new_content):
+    if status_message is None:
+        print("status_message is None, can't update it.")
+        return
+
     try:
         await status_message.edit(content=new_content)
     except Exception as e:
@@ -106,6 +110,7 @@ async def update_status_message(status_message, new_content):
 @client.slash_command(description="Update the bot from the Git repository.")
 @is_admin_or_user()
 async def update(ctx, branch="beta", restart_after_update=False):
+    status_message = None
     try:
         status_message = await ctx.send('Starting update process...')
         current_branch_proc = await asyncio.create_subprocess_exec(
@@ -139,9 +144,11 @@ async def update(ctx, branch="beta", restart_after_update=False):
             await restart_bot(ctx)
             await update_status_message(status_message, 'Bot restarted successfully.')
     except Exception as e:
-        await update_status_message(status_message, f'Error updating the script: {e}')
+        if status_message is not None:
+            await update_status_message(status_message, f'Error updating the script: {e}')
     finally:
-        await update_status_message(status_message, 'Update process completed.')
+        if status_message is not None:
+            await update_status_message(status_message, 'Update process completed.')
 
 async def stash_changes(ctx):
     stash_message = await ctx.send('Stashing changes...')
