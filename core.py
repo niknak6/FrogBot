@@ -139,30 +139,20 @@ async def pull_changes(ctx, branch):
     await pull_proc.communicate()
     return pull_proc, pull_message
 
-def save_restart_channel_id():
-    with open('restart_channel_id.txt', 'w') as f:
-        f.write(str(restart_channel_id))
-
-def load_restart_channel_id():
-    try:
-        with open('restart_channel_id.txt', 'r') as f:
-            return int(f.read().strip())
-    except FileNotFoundError:
-        return None
-
 async def restart_bot(ctx):
     global restart_channel_id
     try:
         await ctx.send("Restarting bot, please wait...")
         restart_channel_id = ctx.channel.id
-        save_restart_channel_id()
+        with open('restart_channel_id.txt', 'w') as f:
+            f.write(str(restart_channel_id))
         for cmd in list(ctx.bot.all_commands.keys()):
             ctx.bot.remove_command(cmd)
         await asyncio.sleep(3)
         subprocess.Popen([sys.executable, str(core_script)])
         await asyncio.sleep(2)
         await ctx.bot.close()
-        os._exit(0)
+        sys.exit(0)
     except Exception as e:
         await ctx.send(f"Error restarting the bot: {e}")
 
@@ -173,14 +163,18 @@ async def on_ready():
     await check_user_points(client)
     await client.change_presence(activity=disnake.Game(name=f"/help | {bot_version}"))
     print(f'Logged in as {client.user.name}')
-    restart_channel_id = load_restart_channel_id()
+    try:
+        with open('restart_channel_id.txt', 'r') as f:
+            restart_channel_id = int(f.read().strip())
+    except FileNotFoundError:
+        restart_channel_id = None
     try:
         if restart_channel_id:
             channel = client.get_channel(restart_channel_id)
             if channel:
                 await channel.send("I'm back online!")
-            restart_channel_id = None
-            save_restart_channel_id()
+            with open('restart_channel_id.txt', 'w') as f:
+                f.write('')
     except Exception as e:
         print(f"Error sending restart message: {e}")
 
