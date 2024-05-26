@@ -35,32 +35,29 @@ emoji_responses = {
     "❤️": "being a good frog"
 }
 
-async def handle_thumbsup_reaction(bot, payload):
+async def handle_reaction(bot, payload, reaction_type, reply_message):
     channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
+
     if message.author != bot.user:
         return
+
     guild = bot.get_guild(payload.guild_id)
     member = guild.get_member(payload.user_id)
     required_rank_id = 1198482895342411846
+
     if not any(role.id >= required_rank_id for role in member.roles):
         return
-    print(f"Thumbs up reaction received from user {payload.user_id}")
-    await message.reply("Thank you for your positive feedback!")
+
+    print(f"{reaction_type} reaction received from user {payload.user_id}")
+    await message.reply(reply_message)
+
+async def handle_thumbsup_reaction(bot, payload):
+    await handle_reaction(bot, payload, "Thumbs up", "Thank you for your positive feedback!")
 
 async def handle_thumbsdown_reaction(bot, payload):
-    channel = bot.get_channel(payload.channel_id)
-    message = await channel.fetch_message(payload.message_id)
-    if message.author != bot.user:
-        return
-    guild = bot.get_guild(payload.guild_id)
-    member = guild.get_member(payload.user_id)
-    required_rank_id = 1198482895342411846
-    if not any(role.id >= required_rank_id for role in member.roles):
-        return
-    print(f"Thumbs down reaction received from user {payload.user_id}")
-    await message.reply("We're sorry to hear that. We'll strive to do better.")
-    
+    await handle_reaction(bot, payload, "Thumbs down", "We're sorry to hear that. We'll strive to do better.")
+
 async def process_close(bot, payload):
     if payload.user_id == bot.user.id or payload.guild_id is None:
         return

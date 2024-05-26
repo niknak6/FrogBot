@@ -85,6 +85,18 @@ except Exception as e:
 root_dir = Path(__file__).resolve().parent
 core_script = root_dir / 'core.py'
 
+@client.slash_command(description = "Restart the bot.")
+@is_admin_or_user()
+async def restart_bot(ctx):
+    try:
+        await restart(ctx)
+    except PermissionError:
+        await ctx.send("Bot does not have permission to perform the restart operation.")
+    except FileNotFoundError:
+        await ctx.send("Could not find the core.py script.")
+    except Exception as e:
+        await ctx.send(f"An error occurred while trying to restart the bot: {e}")
+
 @client.slash_command(description = "Update the bot from the Git repository.")
 @is_admin_or_user()
 async def update(ctx, branch="beta", restart_after_update=False):
@@ -93,7 +105,7 @@ async def update(ctx, branch="beta", restart_after_update=False):
         await git_stash(ctx)
         await git_pull_origin(ctx, branch)
         if restart_after_update:
-            await restart(ctx)
+            await restart_bot(ctx)
     except Exception as e:
         await ctx.send(f'Error updating the script: {e}')
 
@@ -123,23 +135,16 @@ async def git_pull_origin(ctx, branch):
         raise Exception(stderr.decode())
 
 async def restart(ctx):
-    try:
-        await ctx.send("Restarting bot, please wait...")
-        with open("restart_channel_id.txt", "w") as file:
-            file.write(str(ctx.channel.id))
-        for cmd in list(ctx.bot.all_commands.keys()):
-            ctx.bot.remove_command(cmd)
-        await asyncio.sleep(3)
-        subprocess.Popen([sys.executable, str(core_script)])
-        await asyncio.sleep(2)
-        await ctx.bot.close()
-        os._exit(0)
-    except PermissionError:
-        await ctx.send("Bot does not have permission to perform the restart operation.")
-    except FileNotFoundError:
-        await ctx.send("Could not find the core.py script.")
-    except Exception as e:
-        await ctx.send(f"An error occurred while trying to restart the bot: {e}")
+    await ctx.send("Restarting bot, please wait...")
+    with open("restart_channel_id.txt", "w") as file:
+        file.write(str(ctx.channel.id))
+    for cmd in list(ctx.bot.all_commands.keys()):
+        ctx.bot.remove_command(cmd)
+    await asyncio.sleep(3)
+    subprocess.Popen([sys.executable, str(core_script)])
+    await asyncio.sleep(2)
+    await ctx.bot.close()
+    os._exit(0)
 
 '''This code defines the core functionality of the bot, including event handlers for when the bot is ready, when a message is received, when a reaction is added, and when a command error occurs, as well as a method to process commands.'''
 @client.event
