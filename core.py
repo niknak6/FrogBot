@@ -113,18 +113,22 @@ async def update(ctx, branch="beta", restart_after_update=False):
         stash_proc = await asyncio.create_subprocess_exec("git", "stash")
         await stash_proc.communicate()
         if stash_proc.returncode == 0:
-            await stash_message.edit(content='Changes stashed successfully.')
+            if stash_message:
+                await stash_message.edit(content='Changes stashed successfully.')
         else:
-            await stash_message.edit(content='Failed to stash changes.')
+            if stash_message:
+                await stash_message.edit(content='Failed to stash changes.')
 
         pull_message = await ctx.send('Pulling changes...')
         pull_proc = await asyncio.create_subprocess_exec('git', 'pull', 'origin', branch, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await pull_proc.communicate()
         if pull_proc.returncode == 0:
-            await pull_message.edit(content='Git pull successful.')
+            if pull_message:
+                await pull_message.edit(content='Git pull successful.')
         else:
             error_msg = stderr.decode()
-            await pull_message.edit(content=f'Git pull failed: {error_msg}')
+            if pull_message:
+                await pull_message.edit(content=f'Git pull failed: {error_msg}')
             raise Exception(error_msg)
 
         if restart_after_update:
