@@ -26,7 +26,6 @@ class ConfirmationView(View):
         no_button = Button(style=disnake.ButtonStyle.red, label="No")
         no_button.callback = self.on_no_button_clicked
         self.add_item(no_button)
-
     async def on_no_button_clicked(self, interaction):
         if interaction.user.id != self.original_poster_id:
             return
@@ -37,16 +36,13 @@ async def on_thread_create(thread):
         await asyncio.sleep(1)
         emojis_to_add = EMOJI_MAP.get(thread.parent_id, [])
 
-        first_message = None
+        first_non_bot_message = None
         async for message in thread.history(limit=None):
-            if first_message is None:
-                first_message = message
-
-            if message.author == message.author.bot:
+            if not message.author.bot:
+                first_non_bot_message = message
                 break
-
-        await asyncio.gather(*(add_reaction(first_message, emoji) for emoji in emojis_to_add))
-        
+        if first_non_bot_message:
+            await asyncio.gather(*(add_reaction(first_non_bot_message, emoji) for emoji in emojis_to_add))
         if thread.parent_id == 1162100167110053888:
             original_message = await thread.fetch_message(thread.id)
             message = await original_message.reply("Would you like assistance from the bot? If so, please reply to this message with \"yes\".")
