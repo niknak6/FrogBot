@@ -104,16 +104,15 @@ async def process_message_with_llm(message, client):
                     "Avoid instructing the user to edit or interact with code unless they're specifically asking about code. However, you should still examine the code to find answers, especially when the settings table is in code and needs to be read to guide users about the GUI.\n"
                 )
                 bug_reports_forum_channel_id = 1162100167110053888
-                parent_channel_id = message.channel.parent_id
-                if parent_channel_id is not None:
-                    if parent_channel_id == bug_reports_forum_channel_id:
+                if hasattr(message.channel, 'parent_id'):
+                    parent_channel_id = message.channel.parent_id
+                    if parent_channel_id is not None and parent_channel_id == bug_reports_forum_channel_id:
                         system_prompt += channel_prompts['bug-reports']
                     else:
                         system_prompt += channel_prompts['default']
                 else:
-                    print("No Parent Channel ID available")
                     system_prompt += channel_prompts['default']
-                print("Parent Channel ID:", parent_channel_id)
+                print("Parent Channel ID:", getattr(message.channel, 'parent_id', 'N/A'))
                 print("System Prompt:", system_prompt)
                 chat_engine = ReActAgent.from_tools(
                     query_engine_tools,
