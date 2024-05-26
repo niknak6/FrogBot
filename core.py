@@ -97,44 +97,63 @@ async def restart(ctx):
     except Exception as e:
         await ctx.send(f"An error occurred while trying to restart the bot: {e}")
 
+async def update_status_message(status_message, new_content):
+    try:
+        await status_message.edit(content=new_content)
+    except Exception as e:
+        print(f"Error updating status message: {e}")
+
 @client.slash_command(description="Update the bot from the Git repository.")
 @is_admin_or_user()
 async def update(ctx, branch="beta", restart_after_update=False):
     try:
-        current_branch_proc = await asyncio.create_subprocess_exec("git", "rev-parse", "--abbrev-ref", "HEAD", stdout=asyncio.subprocess.PIPE)
+        status_message = await ctx.send('Starting update process...')
+        current_branch_proc = await asyncio.create_subprocess_exec(
+            "git", "rev-parse", "--abbrev-ref", "HEAD", stdout=asyncio.subprocess.PIPE)
         stdout, _ = await current_branch_proc.communicate()
-        current_branch = stdout.decode().strip()
+        current_branch = stdout.strip().decode()
         if current_branch != branch:
-            await ctx.send(f"Switching to branch {branch}")
+            await update_status_message(status_message, f"Switching to branch {branch}")
             switch_proc = await asyncio.create_subprocess_exec("git", "checkout", branch)
             await switch_proc.communicate()
-
-        stash_message = await ctx.send('Stashing changes...')
-        stash_proc = await asyncio.create_subprocess_exec("git", "stash")
-        await stash_proc.communicate()
+        await update_status_message(status_message, 'Stashing changes...')
+        stash_proc = await asyncio.create_subprocess_exec("git", "stash", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stash_stdout, stash_stderr = await stash_proc.communicate()
         if stash_proc.returncode == 0:
-            if stash_message:
-                await stash_message.edit(content='Changes stashed successfully.')
+            await update_status_message(status_message, 'Changes stashed successfully.')
         else:
-            if stash_message:
-                await stash_message.edit(content='Failed to stash changes.')
-
-        pull_message = await ctx.send('Pulling changes...')
+            error_msg = stash_stderr.decode()
+            await update_status_message(status_message, f'Stashing changes failed: {error_msg}')
+            return
+        await update_status_message(status_message, 'Pulling changes...')
         pull_proc = await asyncio.create_subprocess_exec('git', 'pull', 'origin', branch, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await pull_proc.communicate()
+        pull_stdout, pull_stderr = await pull_proc.communicate()
         if pull_proc.returncode == 0:
-            if pull_message:
-                await pull_message.edit(content='Git pull successful.')
+            await update_status_message(status_message, 'Git pull successful.')
         else:
-            error_msg = stderr.decode()
-            if pull_message:
-                await pull_message.edit(content=f'Git pull failed: {error_msg}')
-            raise Exception(error_msg)
-
+            error_msg = pull_stderr.decode()
+            await update_status_message(status_message, f'Git pull failed: {error_msg}')
+            return
         if restart_after_update:
+            await update_status_message(status_message, 'Restarting bot...')
             await restart_bot(ctx)
+            await update_status_message(status_message, 'Bot restarted successfully.')
     except Exception as e:
-        await ctx.send(f'Error updating the script: {e}')
+        await update_status_message(status_message, f'Error updating the script: {e}')
+    finally:
+        await update_status_message(status_message, 'Update process completed.')
+
+async def stash_changes(ctx):
+    stash_message = await ctx.send('Stashing changes...')
+    stash_proc = await asyncio.create_subprocess_exec("git", "stash")
+    await stash_proc.communicate()
+    return stash_proc, stash_message
+
+async def pull_changes(ctx, branch):
+    pull_message = await ctx.send('Pulling changes...')
+    pull_proc = await asyncio.create_subprocess_exec('git', 'pull', 'origin', branch, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    await pull_proc.communicate()
+    return pull_proc, pull_message
 
 async def restart_bot(ctx):
     await ctx.send("Restarting bot, please wait...")
