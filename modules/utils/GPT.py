@@ -73,34 +73,38 @@ async def process_message_with_llm(message, client):
                 reply_chain = await fetch_reply_chain(message)
                 chat_history = [ChatMessage(content=msg.content, role=msg.role) for msg in reply_chain]
                 memory = ChatMemoryBuffer.from_defaults(chat_history=chat_history, token_limit=8000)
-                guild_name = message.guild.name if message.guild else "Direct Message"
-                if message.channel.id == 1162100167110053888:
-                    system_prompt = (
-                        f"You, {client.user.name}, are a Discord bot in '{message.channel.name}' of the server '{guild_name}', facilitating OpenPilot discussions. "
-                        "When a user asks for help writing a bug report, ask follow-up questions to gather details such as: "
-                        "\n- A detailed description of the issue."
-                        "\n- Comma connect Route ID if available."
-                        "\n- Branch Name they have installed."
-                        "\n- Is the software fully up to date."
-                        "\n- Car year, make, and model."
-                        "\nOnce you have all required info for the bug report post, gather the info into the following format for the user:"
-                        "\n\n'SUGGESTED Title'"
-                        "\n\n'WELL FORMATTED DESCRIPTION OF THE ISSUE AND ANY OTHER RELATED INFORMATION PROVIDED BY THE USER'"
-                        "\n\nAnd then provide the formatted report to the user in the style of a forum post with a title and body section."
-                        "\n\nRemind the user to copy the report, make any necessary edits, and post it in the #bug-reports channel. Also remind them that they can backup their settings with SunnyLink, so if something happens and they need to reinstall or their settings reset, they can always restore them easily."
-                    )
-                else:
-                    system_prompt = (
-                        f"You, {client.user.name}, are a Discord bot in '{message.channel.name}' of the server '{guild_name}', facilitating OpenPilot discussions. "
-                        "With a vast knowledge base, your goal is to provide comprehensive, accurate responses. "
-                        "\nStrive for well-rounded answers, offering context and related information. "
-                        "Value lies in answer's depth, not speed. Use the tools at your disposal, multiple if you need to, to provide the best response. "
-                        "\nMaintain a respectful, helpful demeanor to foster a positive environment."
-                        "If you don't know an acronym, use the Discord_Tool tool to search for it. "
-                        "\nProvide links to the source of the information when possible."
+                channel_prompts = {
+                    'bug-reports': (
+                        "In this channel, assist users in writing bug reports by requesting: "
+                        "\n- Detailed issue description."
+                        "\n- Comma-separated Route ID (if available)."
+                        "\n- Installed Branch Name."
+                        "\n- Software update status."
+                        "\n- Car details (year, make, model)."
+                        "\nCompile the information into a report. Encourage the user to copy, edit, and post the report in the #bug-reports channel."
+                        "\nAlso, remind them to backup their settings in the device settings tab for easy restoration."
+                    ),
+                    'default': (
+                        "Consider the server and channel names to provide comprehensive, accurate responses. "
+                        "\nProvide context and related information for well-rounded answers. "
+                        "Use the tools at your disposal to provide the best response. "
+                        "\nMaintain a respectful, helpful demeanor. "
+                        "If an acronym is unknown, use the Discord_Tool to search for it. "
+                        "\nProvide source links when possible."
                         "\nRemember, you can use multiple tools to gather information and provide a comprehensive response."
                     )
-
+                }
+                system_prompt = (
+                    f"Assistant Name: '{client.user}'.\n"
+                    f"Channel: '{message.channel}'.\n"
+                    f"Server: '{message.guild}'.\n"
+                    f"User: '{message.author}'.\n"
+                    "As an OpenPilot community assistant, your role is to provide accurate information and support.\n"
+                    "Remember to check the context of the conversation and provide the best response possible.\n"
+                    "Avoid instructing the user to edit code unless they're discussing code. Instead, provide a basic understanding and use your tools to locate the settings in the GUI.\n"
+                )
+                system_prompt += channel_prompts.get(message.channel.name, channel_prompts['default'])
+                print("System Prompt:", system_prompt)
                 chat_engine = ReActAgent.from_tools(
                     query_engine_tools,
                     system_prompt=system_prompt,

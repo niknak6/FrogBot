@@ -156,6 +156,7 @@ async def restart_bot(ctx):
     except Exception as e:
         await ctx.send(f"Error restarting the bot: {e}")
 
+'''This code defines the core functionality of the bot, including event handlers for when the bot is ready, when a message is received, when a reaction is added, and when a command error occurs, as well as a method to process commands.'''
 @client.event
 async def on_ready():
     global restart_channel_id
