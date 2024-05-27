@@ -1,3 +1,5 @@
+# modules.emoji
+
 import datetime
 import asyncio
 from contextlib import suppress
