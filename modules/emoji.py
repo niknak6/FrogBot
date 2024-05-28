@@ -86,7 +86,7 @@ async def handle_checkmark_reaction(bot, payload, original_poster_id):
     )
 
     def check(interaction: Interaction):
-        return interaction.user.id == original_poster_id
+        return interaction.user.id == user_id
 
     async def send_reminder():
         await asyncio.sleep(43200)
