@@ -14,6 +14,15 @@ async def initialize_database():
                 points INTEGER NOT NULL DEFAULT 0
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS interactions (
+                message_id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                thread_id INTEGER NOT NULL,
+                satisfaction_message_id INTEGER NOT NULL,
+                channel_id INTEGER NOT NULL
+            )
+        ''')
         conn.commit()
         cursor.close()
 
