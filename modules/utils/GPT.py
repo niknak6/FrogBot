@@ -102,6 +102,7 @@ async def process_message_with_llm(message, client):
                     "As an OpenPilot community assistant, your role is to provide accurate information and support.\n"
                     "Remember to check the context of the conversation and provide the best response possible.\n"
                     "Avoid instructing the user to edit or interact with code unless they're specifically asking about code. However, you should still examine the code to find answers, especially when the settings table is in code and needs to be read to guide users about the GUI.\n"
+                    "Make sure to remind users that you're in alpha, and that if they want to reply to you, to reply to your message directly."
                 )
                 bug_reports_forum_channel_id = 1162100167110053888
                 if hasattr(message.channel, 'parent_id'):
@@ -112,8 +113,6 @@ async def process_message_with_llm(message, client):
                         system_prompt += channel_prompts['default']
                 else:
                     system_prompt += channel_prompts['default']
-                print("Parent Channel ID:", getattr(message.channel, 'parent_id', 'N/A'))
-                print("System Prompt:", system_prompt)
                 chat_engine = ReActAgent.from_tools(
                     query_engine_tools,
                     system_prompt=system_prompt,
