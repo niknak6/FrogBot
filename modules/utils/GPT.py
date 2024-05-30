@@ -7,6 +7,7 @@ from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
 from llama_index.vector_stores.duckdb import DuckDBVectorStore
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.agent import ReActAgent
 from llama_index.core.llms import ChatMessage
 from llama_index.llms.openai import OpenAI
@@ -71,8 +72,7 @@ async def process_message_with_llm(message, client):
         try:
             async with message.channel.typing():
                 reply_chain = await fetch_reply_chain(message)
-                chat_history = [ChatMessage(content=msg.content, role=msg.role) for msg in reply_chain]
-                memory = ChatMemoryBuffer.from_defaults(chat_history=chat_history, token_limit=8000)
+                chat_history = [ChatMessage(content=msg.content, role=msg.role, user_name=msg.user_name) for msg in reply_chain]
                 channel_prompts = {
                     'bug-reports': (
                         "In this channel, assist users in writing bug reports by requesting: "
@@ -102,6 +102,7 @@ async def process_message_with_llm(message, client):
                     "As an OpenPilot community assistant, your role is to provide accurate information and support.\n"
                     "Remember to check the context of the conversation and provide the best response possible.\n"
                     "Avoid instructing the user to edit or interact with code unless they're specifically asking about code. However, you should still examine the code to find answers, especially when the settings table is in code and needs to be read to guide users about the GUI.\n"
+                    "Make sure to remind users that you're in alpha, and that if they want to reply to you, to reply to your message directly."
                 )
                 bug_reports_forum_channel_id = 1162100167110053888
                 if hasattr(message.channel, 'parent_id'):
@@ -112,21 +113,19 @@ async def process_message_with_llm(message, client):
                         system_prompt += channel_prompts['default']
                 else:
                     system_prompt += channel_prompts['default']
-                print("Parent Channel ID:", getattr(message.channel, 'parent_id', 'N/A'))
-                print("System Prompt:", system_prompt)
-                chat_engine = ReActAgent.from_tools(
+                chat_engine = OpenAIAgent.from_tools(
                     query_engine_tools,
                     system_prompt=system_prompt,
                     verbose=True,
                     max_iterations=20,
-                    memory=memory,
+                    chat_history=chat_history,
                 )
-                memory.put(ChatMessage(content=content, role="user"))
+                chat_history.append(ChatMessage(content=content, role="user"))
                 chat_response = await asyncio.to_thread(chat_engine.chat, content)
                 if not chat_response or not chat_response.response:
                     await message.channel.send("There was an error processing the message." if not chat_response else "I didn't get a response.")
                     return
-                memory.put(ChatMessage(content=chat_response.response, role="assistant"))
+                chat_history.append(ChatMessage(content=chat_response.response, role="assistant"))
                 response_text = chat_response.response
                 response_text = re.sub(r'^[^:]+:\s(?=[A-Z])', '', response_text)
                 await send_long_message(message, response_text)

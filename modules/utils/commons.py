@@ -6,9 +6,10 @@ import subprocess
 import re
 
 class HistoryChatMessage:
-    def __init__(self, content, role, additional_kwargs=None):
+    def __init__(self, content, role, user_name=None, additional_kwargs=None):
         self.content = content
         self.role = role
+        self.user_name = user_name
         self.additional_kwargs = additional_kwargs if additional_kwargs else {}
 
 async def fetch_reply_chain(message, max_tokens=4096):
@@ -20,10 +21,11 @@ async def fetch_reply_chain(message, max_tokens=4096):
         try:
             message = await message.channel.fetch_message(message.reference.message_id)
             role = Role.ASSISTANT if message.author.bot else Role.USER
+            user_name = message.author.name if not message.author.bot else None
             message_content = f"{message.content}\n"
             message_tokens = len(message_content) // 4
             if tokens_used + message_tokens <= max_tokens:
-                context.append(HistoryChatMessage(message_content, role))
+                context.append(HistoryChatMessage(message_content, role, user_name))
                 tokens_used += message_tokens
             else:
                 break
