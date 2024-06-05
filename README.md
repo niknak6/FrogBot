@@ -1,4 +1,4 @@
-# 🐸 FrogBot - THIS READ ME IS OUT OF DATE!
+# 🐸 FrogBot
 
 [![GitHub issues](https://img.shields.io/github/issues/idontneedonetho/FrogBot)](https://github.com/idontneedonetho/FrogBot/issues)
 [![GitHub stars](https://img.shields.io/github/stars/idontneedonetho/FrogBot)](https://github.com/idontneedonetho/FrogBot/stargazers)
@@ -10,7 +10,7 @@
 - [Branches](#branches)
 - [🚀 Current Features](#-current-features)
 - [💬 Usage Examples](#-usage-examples)
-- [🧱 DLM](#-dlm)
+- [🧱 DLM (_May be depreciated soon_)](#-dlm)
 - [🤝 Contributing](#-contributing)
 - [📞 Connect](#-connect)
 - [🙌 Acknowledgments](#-acknowledgments)
@@ -28,23 +28,28 @@
 - Points assignment and removal
 - Points tracking
 - Add points via reactions
-- Respond to different messages
 - Updating via commands
-- AI LLM integration via GPT 4 with OpenAI, and Google Gemini-Pro as a fallback
+- AI LLM and RAG integration via Llama Index
 - Reply context chain for the LLM; you can simply reply to the bot's message to continue the conversation
-- Very basic and rough web search
+- Web search for specific sites
 
 ## 💬 Usage Examples
-- To add points to a user: `@{bot name} add {number} points @{user}`
-- To remove points from a user: `@{bot name} remove {number} points @{user}`
-- To check a user's points: `@{bot name} check points @{user}`
-- Ask questions or seek information by mentioning the bot in your message: `@{bot name} What's the weather today?`
-- Use `@{bot name} help` for more information on available commands.
+- To add points to a user: `/add points user`
+- To remove points from a user: `/remove points user`
+- To check a user's points: `/check_points`
+- Ask questions or seek information by mentioning the bot in your message: `@{bot name} What's the current price of a C3?`
+- Use `/help` for more information on available commands.
 
-<h2 id="dlm">🧱 DLM</h2>
+## 🧱 DLM
+*(_May be deprecated soon_)*
+
 Dynamically Loaded Modules, or DLM for short, is a different way to add to the bot. Why use this when discord.py has Cogs? Cogs, for me, seem to be hit or miss, and we needed something more robust, something that wouldn't need us to change any other code to work.
+
+What I wanted was a system that would take .py files and load them into the system in an easy-to-use way. If you look at all the modules already here, they can help you with making your own.
+
 Now it isn't perfect, but it's the best we can get and allows most modules to be pretty freeform. If you want to add a feature, simply write a new .py file and make it a PR! For now, I'll work directly with devs of modules to make sure DLM works, and works right.
-Hopefully in the future, PR's will be automated to an extent. We'll see... For now, this is where we are.
+
+Hopefully in the future, PRs will be automated to an extent. We'll see... For now, this is where we are.
 
 ## 🤝 Contributing
 Contributions to FrogBot are welcome! Follow these steps to contribute:
@@ -53,31 +58,19 @@ Contributions to FrogBot are welcome! Follow these steps to contribute:
 3. Profit???
 
 ## 📞 Connect
-For support and questions, join our Discord server: [FrogPilot Discord](https://l.linklyhq.com/l/1t3Il).
+For support and questions, join our Discord server: [FrogPilot Discord](https://discord.gg/frogpilot).
 
-*Just go-to `#development-chat`, and join the `#FrogBot Dev` thread!*
+*Just go-to [`#bot-general`](https://discord.com/channels/1137853399715549214/1201763192884428861) channel at the bottom!*
 
 ## 🙌 Acknowledgments
 ### Thanks-
-- [Joeslinky](https://github.com/Joeslinky) - For their GPT 4 API KEY!
+- [Joeslinky](https://github.com/Joeslinky)
 - [twilsonco](https://github.com/twilsonco)
-- nik.olas
+- [nik.olas](https://github.com/niknak6)
 - cone_guy_03312
 - pkp24
-- mike854
+- [mike854](https://github.com/mike86437)
 - [frogsgomoo](https://github.com/FrogAi)
-- And all those that help break to test the bot
-
-## 🙌 Libraries and Tools Used
-FrogBot relies on the following external libraries and tools to power its functionality:
-
-- [discord.py](https://pypi.org/project/discord.py/): A popular Python library for creating Discord bots.
-- [nltk](https://www.nltk.org/): The Natural Language Toolkit for Python, used for natural language processing.
-- [trafilatura](https://pypi.org/project/trafilatura/): A Python library for extracting text from web pages.
-- [requests](https://pypi.org/project/requests/): A Python library for making HTTP requests.
-- [python-dotenv](https://pypi.org/project/python-dotenv/): A Python library for reading environment variables from a `.env` file.
-- [openai](https://pypi.org/project/openai/): Python client library for OpenAI GPT models.
-
-These external libraries and tools are essential for enabling FrogBot's features and capabilities. Make sure to review their documentation for further details on usage and functionality.
+- And all those that help to test the bot
 
 *Disclaimer this README file was written mostly by ChatGPT 3.5 Turbo.*
