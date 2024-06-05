@@ -2,7 +2,6 @@
 
 from llama_index.core.llms import MessageRole as Role
 from disnake.ext import commands
-import subprocess
 import re
 
 class HistoryChatMessage:
@@ -45,28 +44,28 @@ async def send_message(message, content, should_reply):
         return None
 
 def split_message(response):
-    max_length = 2000
+    max_length = 1950
     markdown_chars = ['*', '_', '~', '|']
+    words = response.split(' ')
     parts = []
+    current_part = ''
     code_block_type = None
-    while len(response) > max_length:
-        split_index = response.rfind('\n', 0, max_length)
-        split_index = max_length if split_index == -1 else split_index
-        part = response[:split_index]
-        code_block_start = part.rfind('```')
-        code_block_end = part.rfind('```', code_block_start + 3)
-        if code_block_start != -1 and (code_block_end == -1 or code_block_end < code_block_start):
-            code_block_type = part[code_block_start + 3:].split('\n', 1)[0]
-            part += '```'
-            response = '```' + (code_block_type + '\n' if code_block_type else '') + response[split_index:].lstrip()
-        else:
-            response = response[split_index:].lstrip()
-        for char in markdown_chars:
-            if part.count(char) % 2 != 0 and not part.endswith('```'):
-                part += char
-                response = char + response
-        parts.append(part)
-    parts.append(response)
+    for word in words:
+        if len(current_part) + len(word) + 1 > max_length:
+            for char in markdown_chars:
+                if current_part.count(char) % 2 != 0 and not current_part.endswith('```'):
+                    if current_part.rfind(char) > 0 and current_part[current_part.rfind(char) - 1] in [' ', '\n'] and current_part[current_part.rfind(char) + 1] in [' ', '\n']:
+                        current_part += char
+            code_block_start = current_part.rfind('```')
+            code_block_end = current_part.rfind('```', code_block_start + 3)
+            if code_block_start != -1 and (code_block_end == -1 or code_block_end < code_block_start):
+                code_block_type = current_part[code_block_start + 3:].split('\n', 1)[0]
+                current_part += '```'
+                word = '```' + (code_block_type + '\n' if code_block_type else '') + word
+            parts.append(current_part)
+            current_part = ''
+        current_part += ' ' + word
+    parts.append(current_part)
     return parts
 
 async def send_long_message(message, response, should_reply=True):
@@ -89,15 +88,6 @@ async def send_long_message(message, response, should_reply=True):
         messages.append(last_message)
         message = last_message
     return messages
-
-def get_git_version():
-    try:
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
-        return f"v2.3 {branch} {commit}"
-    except subprocess.CalledProcessError:
-        return "unknown-version"
-bot_version = get_git_version()
 
 def is_admin():
     async def predicate(ctx):

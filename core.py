@@ -15,48 +15,7 @@ import asyncio
 import disnake
 import sys
 import os
-
 load_dotenv()
-
-'''This Python class, ModuleLoader, dynamically loads Python modules from a specified directory, excluding 'utils', and provides methods to retrieve command and event handlers from these modules.'''
-class ModuleLoader:
-    def __init__(self, directory):
-        self.directory = directory
-        self.modules = []
-
-    def load_modules(self, client):
-        for root, dirs, files in os.walk(self.directory):
-            if 'utils' in dirs:
-                dirs.remove('utils')
-            for filename in files:
-                if filename.endswith('.py'):
-                    module_name = filename[:-3]
-                    module_path = os.path.join(root, filename)
-                    try:
-                        module = self._load_module(module_name, module_path)
-                        self.modules.append(module)
-                        print(f"Loading module: {module_name}")
-                        if hasattr(module, 'setup'):
-                            module.setup(client)
-                    except Exception as e:
-                        print(f"Failed to load module: {module_name}. Error: {e}")
-                        continue
-
-    def _load_module(self, module_name, module_path):
-        spec = importlib.util.spec_from_file_location(module_name, module_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-
-    def get_command_handlers(self):
-        return {command: getattr(module, handler_name) 
-                for module in self.modules if hasattr(module, 'cmd') 
-                for command, handler_name in module.cmd.items() 
-                if hasattr(module, handler_name)}
-
-    def get_event_handlers(self, event_name):
-        return [getattr(module, event_name) 
-                for module in self.modules if hasattr(module, event_name)]
 
 '''This Python code initializes a Discord bot with specific intents, and uses the ModuleLoader instance to dynamically load modules from the 'modules' directory into the bot.'''
 intents = disnake.Intents(
@@ -69,17 +28,30 @@ intents = disnake.Intents(
 )
 
 command_sync_flags = commands.CommandSyncFlags.default()
-command_sync_flags.sync_commands_debug = True
+command_sync_flags.sync_commands_debug = False
 client = commands.Bot(command_prefix='//', intents=intents, command_sync_flags=command_sync_flags, test_guilds=[698205243103641711, 1137853399715549214])
 
-module_loader = ModuleLoader('modules')
-module_loader.load_modules(client)
+'''Loads all the cogs from the 'modules' directory into the bot.'''
+def load_module(file_path, name):
+    spec = importlib.util.spec_from_file_location(name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for attr_name in dir(module):
+        attr = getattr(module, attr_name)
+        if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
+            client.add_cog(attr(client))
+            print(f"Imported cog: {attr.__name__}")
 
-try:
-    from modules.utils.memory_check import MemoryMonitor
-    memory_monitor = MemoryMonitor(interval=60)
-except Exception as e:
-    pass
+cogs_dir = "modules"
+for item in os.listdir(cogs_dir):
+    item_path = os.path.join(cogs_dir, item)
+    if os.path.isdir(item_path):
+        for file in os.listdir(item_path):
+            if file.endswith('.py'):
+                file_path = os.path.join(item_path, file)
+                load_module(file_path, f"{item}.{file[:-3]}")
+    elif item.endswith('.py'):
+        load_module(item_path, item[:-3])
 
 '''This code defines commands for the bot to restart, shutdown, and update itself, including switching branches and pulling from a Git repository, with error handling for each operation.'''
 root_dir = Path(__file__).resolve().parent
@@ -184,11 +156,6 @@ async def on_message(message):
         await client.process_commands(message)
 
 @client.event
-async def on_reaction_add(reaction, user):
-    for handler in module_loader.get_event_handlers('on_reaction_add'):
-        await handler(reaction, user)
-
-@client.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         await ctx.send("Sorry, I didn't understand that command.")
@@ -200,8 +167,7 @@ async def on_command_error(ctx, error):
 '''This code attempts to run the Discord client with a token retrieved from the environment variables.'''
 try:
     client.run(os.getenv("DISCORD_TOKEN"))
-finally:
-    memory_monitor.stop()
-    print("Memory monitor stopped")
+except Exception as e:
+    print(f"An error occurred while trying to run the Discord client: {e}")
 
 '''Kaofui was here uwu'''

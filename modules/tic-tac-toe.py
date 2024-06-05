@@ -22,14 +22,20 @@ class TicTacToeButton(ui.Button):
             state.board[self.x][self.y] = 'X' if state.current_player == state.users[0] else 'O'
             self.label = state.board[self.x][self.y]
             self.disabled = True
-            if state.check_winner():
-                await interaction.response.edit_message(content=f"{state.current_player.mention} wins!", view=None)
+
+            if state.check_winner() or '-' not in [item for sublist in state.board for item in sublist]:
+                for item in state.children:
+                    if isinstance(item, TicTacToeButton):
+                        item.disabled = True
+                if state.check_winner():
+                    await interaction.response.edit_message(content=f"{state.current_player.mention} wins!", view=state)
+                else:
+                    await interaction.response.edit_message(content="It's a draw!", view=state)
                 return
-            elif '-' not in [item for sublist in state.board for item in sublist]:
-                await interaction.response.edit_message(content="It's a draw!", view=None)
-                return
+            
             state.switch_player()
             await interaction.response.edit_message(content=f"It's {state.current_player.mention}'s turn", view=state)
+            
             if state.current_player == state.bot:
                 await asyncio.sleep(0.5)
                 await state.bot_move(interaction)
@@ -61,12 +67,17 @@ class TicTacToe(ui.View):
                     item.label = self.board[x][y]
                     item.disabled = True
                     break
-            if self.check_winner():
-                await interaction.edit_original_message(content=f"{self.current_player.mention} wins!", view=None)
+            
+            if self.check_winner() or '-' not in [item for sublist in self.board for item in sublist]:
+                for item in self.children:
+                    if isinstance(item, TicTacToeButton):
+                        item.disabled = True
+                if self.check_winner():
+                    await interaction.edit_original_message(content=f"{self.current_player.mention} wins!", view=self)
+                else:
+                    await interaction.edit_original_message(content="It's a draw!", view=self)
                 return
-            elif '-' not in [item for sublist in self.board for item in sublist]:
-                await interaction.edit_original_message(content="It's a draw!", view=None)
-                return
+            
             self.switch_player()
             await interaction.edit_original_message(content=f"It's {self.current_player.mention}'s turn", view=self)
 
@@ -86,13 +97,17 @@ class TicTacToe(ui.View):
             return True
         return False
 
-@commands.slash_command()
-async def tictactoe(ctx: disnake.ApplicationCommandInteraction, player2: disnake.User):
-    player1 = ctx.author
-    if player1.id == player2.id:
-        await ctx.send("You cannot play against yourself!")
-        return
-    await ctx.send(f"It's {player1.mention}'s turn", view=TicTacToe(player1, player2, ctx.bot.user))
+class TicTacToeCog(commands.Cog):
+    def __init__(self, client):
+        self.client = client
+
+    @commands.slash_command()
+    async def tictactoe(self, ctx: disnake.ApplicationCommandInteraction, player2: disnake.User):
+        player1 = ctx.author
+        if player1.id == player2.id:
+            await ctx.send("You cannot play against yourself!")
+            return
+        await ctx.send(f"It's {player1.mention}'s turn", view=TicTacToe(player1, player2, ctx.client.user))
 
 def setup(client):
-    client.add_slash_command(tictactoe)
+    client.add_cog(TicTacToeCog(client))

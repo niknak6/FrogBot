@@ -35,7 +35,6 @@ url = make_url(connection_string)
 embed_dim=384
 
 '''GOOGLE SEARCH TOOL'''
-google_search_spec = DuckDuckGoSearchToolSpec()
 search_spec = DuckDuckGoSearchToolSpec()
 def site_search(input, site):
     query = input if isinstance(input, str) else input.get('query')
@@ -144,22 +143,12 @@ async def process_message_with_llm(message, client):
                         system_prompt += channel_prompts['default']
                 else:
                     system_prompt += channel_prompts['default']
-                try:
-                    chat_engine = OpenAIAgent.from_tools(
-                        query_engine_tools,
-                        system_prompt=system_prompt,
-                        verbose=True,
-                        chat_history=chat_history,
-                    )
-                except Exception as e:
-                    print(f"OpenAIAgent failed with error: {str(e)}. Switching to ReActAgent.")
-                    chat_engine = ReActAgent.from_tools(
-                        query_engine_tools,
-                        system_prompt=system_prompt,
-                        verbose=True,
-                        max_iterations=20,
-                        chat_history=chat_history,
-                    )
+                chat_engine = OpenAIAgent.from_tools(
+                    query_engine_tools,
+                    system_prompt=system_prompt,
+                    verbose=True,
+                    chat_history=chat_history,
+                )
                 chat_history.append(ChatMessage(content=content, role="user"))
                 chat_response = await asyncio.to_thread(chat_engine.chat, content)
                 if not chat_response or not chat_response.response:
@@ -168,7 +157,7 @@ async def process_message_with_llm(message, client):
                 chat_history.append(ChatMessage(content=chat_response.response, role="assistant"))
                 response_text = [chat_response.response]
                 if not reply_chain:
-                    response_text.append(f"*Note: Reply directly to {client.user.mention}'s messages to maintain conversation context.*")
+                    response_text.append(f"\n*Reply directly to {client.user.mention}'s messages to maintain conversation context.*")
                 response_text = '\n'.join(response_text)
                 await send_long_message(message, response_text)
         except Exception as e:

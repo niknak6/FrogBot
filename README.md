@@ -10,7 +10,6 @@
 - [Branches](#branches)
 - [🚀 Current Features](#-current-features)
 - [💬 Usage Examples](#-usage-examples)
-- [🧱 DLM (_May be depreciated soon_)](#-dlm)
 - [🤝 Contributing](#-contributing)
 - [📞 Connect](#-connect)
 - [🙌 Acknowledgments](#-acknowledgments)
@@ -23,7 +22,7 @@
 *Note: Dev is considered the starting point for most people, as it's primarily for PRs, and we aim to keep it stable.*
 
 ## 🚀 Current Features
-- [DLM](#-dlm)
+- Drag and Dop-in Cogs
 - Automatic role assignment based on points
 - Points assignment and removal
 - Points tracking
@@ -40,20 +39,9 @@
 - Ask questions or seek information by mentioning the bot in your message: `@{bot name} What's the current price of a C3?`
 - Use `/help` for more information on available commands.
 
-## 🧱 DLM
-*(_May be deprecated soon_)*
-
-Dynamically Loaded Modules, or DLM for short, is a different way to add to the bot. Why use this when discord.py has Cogs? Cogs, for me, seem to be hit or miss, and we needed something more robust, something that wouldn't need us to change any other code to work.
-
-What I wanted was a system that would take .py files and load them into the system in an easy-to-use way. If you look at all the modules already here, they can help you with making your own.
-
-Now it isn't perfect, but it's the best we can get and allows most modules to be pretty freeform. If you want to add a feature, simply write a new .py file and make it a PR! For now, I'll work directly with devs of modules to make sure DLM works, and works right.
-
-Hopefully in the future, PRs will be automated to an extent. We'll see... For now, this is where we are.
-
 ## 🤝 Contributing
 Contributions to FrogBot are welcome! Follow these steps to contribute:
-1. Create a DLM.
+1. Create a Cog.
 2. Create a new PR for it.
 3. Profit???
 
