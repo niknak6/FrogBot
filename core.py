@@ -2,14 +2,13 @@
 
 from modules.utils.database import initialize_database
 from modules.utils.commons import is_admin_or_user
+from concurrent.futures import ThreadPoolExecutor
 from modules.roles import check_user_points
 from disnake.ext import commands
 from dotenv import load_dotenv
-import concurrent.futures
 from pathlib import Path
 import importlib.util
 import subprocess
-import traceback
 import asyncio
 import disnake
 import sys
@@ -31,26 +30,28 @@ command_sync_flags.sync_commands_debug = False
 client = commands.Bot(command_prefix='//', intents=intents, command_sync_flags=command_sync_flags, test_guilds=[698205243103641711, 1137853399715549214])
 
 '''Loads all the cogs from the 'modules' directory into the bot.'''
-def load_module(file_path, name):
-    spec = importlib.util.spec_from_file_location(name, file_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    for attr_name in dir(module):
-        attr = getattr(module, attr_name)
-        if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
-            client.add_cog(attr(client))
-            print(f"Imported cog: {attr.__name__}")
+if __name__ == "__main__":
+    def load_module(file_path, name):
+        spec = importlib.util.spec_from_file_location(name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
+                client.add_cog(attr(client))
+                print(f"Imported cog: {attr.__name__}")
 
-cogs_dir = "modules"
-for item in os.listdir(cogs_dir):
-    item_path = os.path.join(cogs_dir, item)
-    if os.path.isdir(item_path):
-        for file in os.listdir(item_path):
-            if file.endswith('.py'):
-                file_path = os.path.join(item_path, file)
-                load_module(file_path, f"{item}.{file[:-3]}")
-    elif item.endswith('.py'):
-        load_module(item_path, item[:-3])
+    cogs_dir = "modules"
+    with ThreadPoolExecutor() as executor:
+        for item in os.listdir(cogs_dir):
+            item_path = os.path.join(cogs_dir, item)
+            if os.path.isdir(item_path):
+                for file in os.listdir(item_path):
+                    if file.endswith('.py'):
+                        file_path = os.path.join(item_path, file)
+                        executor.submit(load_module, file_path, f"{item}.{file[:-3]}")
+            elif item.endswith('.py'):
+                executor.submit(load_module, item_path, item[:-3])
 
 '''This code defines commands for the bot to restart, shutdown, and update itself, including switching branches and pulling from a Git repository, with error handling for each operation.'''
 root_dir = Path(__file__).resolve().parent
@@ -150,8 +151,6 @@ async def on_ready():
                 f.write('')
     except Exception as e:
         print(f"Error sending restart message: {e}")
-
-executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(os.cpu_count(), 4))
 
 '''This code attempts to run the Discord client with a token retrieved from the environment variables.'''
 try:
