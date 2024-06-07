@@ -53,92 +53,92 @@ discord_storage_context = StorageContext.from_defaults(vector_store=discord_vect
 discord_index = VectorStoreIndex.from_documents(discord_docs, storage_context=discord_storage_context, show_progress=True)
 print("Discord data setup complete.")
 
-# '''WIKI DATA'''
-# scraper = WholeSiteReader(
-#     prefix="https://github.com/commaai/openpilot/wiki/", max_depth=2
-# )
-# wiki = scraper.load_data(
-#     base_url="https://github.com/commaai/openpilot/wiki"
-# )
-# print("Wiki data downloaded successfully. Setting up vector store for wiki...")
-# wiki_vector_store = PGVectorStore.from_params(
-#     database=db_name,
-#     host=url.host,
-#     password=url.password,
-#     port=url.port,
-#     user=url.username,
-#     table_name="wiki_docs",
-#     embed_dim=embed_dim,
-#     hybrid_search=True,
-#     text_search_config="english",
-# )
-# wiki_storage_context = StorageContext.from_defaults(vector_store=wiki_vector_store)
-# wiki_index = VectorStoreIndex.from_documents(wiki, storage_context=wiki_storage_context, show_progress=True)
-# print("Wiki index setup complete.")
+'''WIKI DATA'''
+scraper = WholeSiteReader(
+    prefix="https://github.com/commaai/openpilot/wiki/", max_depth=2
+)
+wiki = scraper.load_data(
+    base_url="https://github.com/commaai/openpilot/wiki"
+)
+print("Wiki data downloaded successfully. Setting up vector store for wiki...")
+wiki_vector_store = PGVectorStore.from_params(
+    database=db_name,
+    host=url.host,
+    password=url.password,
+    port=url.port,
+    user=url.username,
+    table_name="wiki_docs",
+    embed_dim=embed_dim,
+    hybrid_search=True,
+    text_search_config="english",
+)
+wiki_storage_context = StorageContext.from_defaults(vector_store=wiki_vector_store)
+wiki_index = VectorStoreIndex.from_documents(wiki, storage_context=wiki_storage_context, show_progress=True)
+print("Wiki index setup complete.")
 
-# '''GITHUB DATA'''
-# repos_config = [
-#     {
-#         "owner": "twilsonco",
-#         "repo": "openpilot",
-#         "branch": "log-info",
-#         "filter_directories": (["sec"], GithubRepositoryReader.FilterType.INCLUDE),
-#         "filter_file_extensions": ([".md"], GithubRepositoryReader.FilterType.INCLUDE),
-#     },
-#     {
-#         "owner": "commaai",
-#         "repo": "openpilot-docs",
-#         "branch": "gh-pages",
-#         "filter_directories": (["docs"], GithubRepositoryReader.FilterType.INCLUDE),
-#         "filter_file_extensions": ([".s"], GithubRepositoryReader.FilterType.EXCLUDE),
-#     },
-#     {
-#         "owner": "commaai",
-#         "repo": "comma10k",
-#         "branch": "master",
-#         "filter_directories": (["imgs", "imgs2", "imgsd", "masks", "masks2", "masksd"], GithubRepositoryReader.FilterType.EXCLUDE),
-#         "filter_file_extensions": ([".png", ".jpg"], GithubRepositoryReader.FilterType.EXCLUDE),
-#     },
-#     {
-#         "owner": "FrogAi",
-#         "repo": "FrogPilot",
-#         "branch": "FrogPilot-Development",
-#         "filter_directories": (["selfdrive", "README.md", "docs", "tools"], GithubRepositoryReader.FilterType.INCLUDE),
-#         "filter_file_extensions": ([".py", ".md", ".h", ".cc"], GithubRepositoryReader.FilterType.INCLUDE),
-#     },
-# ]
+'''GITHUB DATA'''
+repos_config = [
+    {
+        "owner": "twilsonco",
+        "repo": "openpilot",
+        "branch": "log-info",
+        "filter_directories": (["sec"], GithubRepositoryReader.FilterType.INCLUDE),
+        "filter_file_extensions": ([".md"], GithubRepositoryReader.FilterType.INCLUDE),
+    },
+    {
+        "owner": "commaai",
+        "repo": "openpilot-docs",
+        "branch": "gh-pages",
+        "filter_directories": (["docs"], GithubRepositoryReader.FilterType.INCLUDE),
+        "filter_file_extensions": ([".s"], GithubRepositoryReader.FilterType.EXCLUDE),
+    },
+    {
+        "owner": "commaai",
+        "repo": "comma10k",
+        "branch": "master",
+        "filter_directories": (["imgs", "imgs2", "imgsd", "masks", "masks2", "masksd"], GithubRepositoryReader.FilterType.EXCLUDE),
+        "filter_file_extensions": ([".png", ".jpg"], GithubRepositoryReader.FilterType.EXCLUDE),
+    },
+    {
+        "owner": "FrogAi",
+        "repo": "FrogPilot",
+        "branch": "FrogPilot-Development",
+        "filter_directories": (["selfdrive", "README.md", "docs", "tools"], GithubRepositoryReader.FilterType.INCLUDE),
+        "filter_file_extensions": ([".py", ".md", ".h", ".cc"], GithubRepositoryReader.FilterType.INCLUDE),
+    },
+]
 
-# for config in tqdm(repos_config, desc="Loading documents from repositories"):
-#     try:
-#         loader = GithubRepositoryReader(
-#             github_client,
-#             owner=config["owner"],
-#             repo=config["repo"],
-#             filter_directories=config["filter_directories"],
-#             filter_file_extensions=config["filter_file_extensions"],
-#             verbose=False,
-#             concurrent_requests=10,
-#             timeout=10,
-#             retries=3,
-#         )
-#         documents = loader.load_data(branch=config["branch"])
+for config in tqdm(repos_config, desc="Loading documents from repositories"):
+    try:
+        loader = GithubRepositoryReader(
+            github_client,
+            owner=config["owner"],
+            repo=config["repo"],
+            filter_directories=config["filter_directories"],
+            filter_file_extensions=config["filter_file_extensions"],
+            verbose=False,
+            concurrent_requests=10,
+            timeout=10,
+            retries=3,
+        )
+        documents = loader.load_data(branch=config["branch"])
 
-#         print(f"{config['owner']}/{config['repo']} data downloaded successfully. Setting up vector store...")
-#         github_vector_store = PGVectorStore.from_params(
-#             database=db_name,
-#             host=url.host,
-#             password=url.password,
-#             port=url.port,
-#             user=url.username,
-#             table_name=f"{config['owner']}-{config['repo']}_docs",
-#             embed_dim=embed_dim,
-#             hybrid_search=True,
-#             text_search_config="english",
-#         )
-#         github_storage_context = StorageContext.from_defaults(vector_store=github_vector_store)
-#         github_index = VectorStoreIndex.from_documents(documents, storage_context=github_storage_context, show_progress=True)
-#         print(f"{config['owner']}/{config['repo']} index setup complete.")
+        print(f"{config['owner']}/{config['repo']} data downloaded successfully. Setting up vector store...")
+        github_vector_store = PGVectorStore.from_params(
+            database=db_name,
+            host=url.host,
+            password=url.password,
+            port=url.port,
+            user=url.username,
+            table_name=f"{config['owner']}-{config['repo']}_docs",
+            embed_dim=embed_dim,
+            hybrid_search=True,
+            text_search_config="english",
+        )
+        github_storage_context = StorageContext.from_defaults(vector_store=github_vector_store)
+        github_index = VectorStoreIndex.from_documents(documents, storage_context=github_storage_context, show_progress=True)
+        print(f"{config['owner']}/{config['repo']} index setup complete.")
 
-#     except httpx.ConnectTimeout:
-#         print(f"Connection timeout for {config['owner']}/{config['repo']}.", file=sys.stderr)
-#         sys.exit(1)
+    except httpx.ConnectTimeout:
+        print(f"Connection timeout for {config['owner']}/{config['repo']}.", file=sys.stderr)
+        sys.exit(1)
