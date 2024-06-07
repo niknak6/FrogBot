@@ -1,7 +1,6 @@
 # modules.utils.GPT
 
 from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
-from modules.utils.commons import send_long_message, fetch_reply_chain
 from llama_index.core.response_synthesizers import CompactAndRefine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
@@ -9,16 +8,48 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.core import Settings, VectorStoreIndex
+from llama_index.core.llms import MessageRole as Role
+from modules.utils.commons import send_long_message
 from llama_index.agent.openai import OpenAIAgent
-from llama_index.core.agent import ReActAgent
 from llama_index.core.llms import ChatMessage
 from llama_index.llms.openai import OpenAI
+from disnake.ext import commands
 from sqlalchemy import make_url
 from dotenv import load_dotenv
+import traceback
 import asyncio
 import openai
 import torch
 import os
+
+class HistoryChatMessage:
+    def __init__(self, content, role, user_name=None, additional_kwargs=None):
+        self.content = content
+        self.role = role
+        self.user_name = user_name
+        self.additional_kwargs = additional_kwargs if additional_kwargs else {}
+
+async def fetch_reply_chain(message, max_tokens=4096):
+    context = []
+    tokens_used = 0
+    current_prompt_tokens = len(message.content) // 4
+    max_tokens -= current_prompt_tokens
+    while message.reference is not None and tokens_used < max_tokens:
+        try:
+            message = await message.channel.fetch_message(message.reference.message_id)
+            role = Role.ASSISTANT if message.author.bot else Role.USER
+            user_name = message.author.name if not message.author.bot else None
+            message_content = f"{message.content}\n"
+            message_tokens = len(message_content) // 4
+            if tokens_used + message_tokens <= max_tokens:
+                context.append(HistoryChatMessage(message_content, role, user_name))
+                tokens_used += message_tokens
+            else:
+                break
+        except Exception as e:
+            print(f"Error fetching reply chain message: {e}")
+            break
+    return context[::-1]
 
 load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
@@ -162,3 +193,28 @@ async def process_message_with_llm(message, client):
                 await send_long_message(message, response_text)
         except Exception as e:
             await message.channel.send(f"An error occurred: {str(e)}")
+        
+class OpenPilotAssistant(commands.Cog):
+    def __init__(self, client):
+        self.client = client
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author == self.client.user or message.author.bot:
+            return
+        if self.client.user in message.mentions:
+            await process_message_with_llm(message, self.client)
+        else:
+            await self.client.process_commands(message)
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx, error):
+        if isinstance(error, commands.CommandNotFound):
+            await ctx.send("Sorry, I didn't understand that command.")
+        else:
+            tb = traceback.format_exception(type(error), error, error.__traceback__)
+            tb_str = "".join(tb)
+            print(f'An error occurred: {error}\n{tb_str}')
+            
+def setup(client):
+    client.add_cog(OpenPilotAssistant(client))

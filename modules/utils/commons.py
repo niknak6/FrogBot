@@ -1,37 +1,7 @@
 # modules.utils.commons
 
-from llama_index.core.llms import MessageRole as Role
 from disnake.ext import commands
 import re
-
-class HistoryChatMessage:
-    def __init__(self, content, role, user_name=None, additional_kwargs=None):
-        self.content = content
-        self.role = role
-        self.user_name = user_name
-        self.additional_kwargs = additional_kwargs if additional_kwargs else {}
-
-async def fetch_reply_chain(message, max_tokens=4096):
-    context = []
-    tokens_used = 0
-    current_prompt_tokens = len(message.content) // 4
-    max_tokens -= current_prompt_tokens
-    while message.reference is not None and tokens_used < max_tokens:
-        try:
-            message = await message.channel.fetch_message(message.reference.message_id)
-            role = Role.ASSISTANT if message.author.bot else Role.USER
-            user_name = message.author.name if not message.author.bot else None
-            message_content = f"{message.content}\n"
-            message_tokens = len(message_content) // 4
-            if tokens_used + message_tokens <= max_tokens:
-                context.append(HistoryChatMessage(message_content, role, user_name))
-                tokens_used += message_tokens
-            else:
-                break
-        except Exception as e:
-            print(f"Error fetching reply chain message: {e}")
-            break
-    return context[::-1]
 
 async def send_message(message, content, should_reply):
     try:

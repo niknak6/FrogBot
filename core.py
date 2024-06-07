@@ -1,8 +1,7 @@
 # core.py
 
-from modules.utils.commons import bot_version, is_admin_or_user
-from modules.utils.GPT import process_message_with_llm
 from modules.utils.database import initialize_database
+from modules.utils.commons import is_admin_or_user
 from modules.roles import check_user_points
 from disnake.ext import commands
 from dotenv import load_dotenv
@@ -118,12 +117,20 @@ async def restart_bot(ctx):
         await ctx.send(f"Error restarting the bot: {e}")
 
 '''This code defines the core functionality of the bot, including event handlers for when the bot is ready, when a message is received, when a reaction is added, and when a command error occurs, as well as a method to process commands.'''
+def get_git_version():
+    try:
+        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
+        return f"v2.5 {branch} {commit}"
+    except subprocess.CalledProcessError:
+        return "unknown-version"
+
 @client.event
 async def on_ready():
     global restart_channel_id
     await initialize_database()
     await check_user_points(client)
-    await client.change_presence(activity=disnake.Game(name=f"/help | {bot_version}"))
+    await client.change_presence(activity=disnake.Game(name=f"/help | {get_git_version()}"))
     print(f'Logged in as {client.user.name}')
     try:
         with open('restart_channel_id.txt', 'r') as f:
@@ -145,24 +152,6 @@ async def on_ready():
         print(f"Error sending restart message: {e}")
 
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(os.cpu_count(), 4))
-
-@client.event
-async def on_message(message):
-    if message.author == client.user or message.author.bot:
-        return
-    if client.user in message.mentions:
-        await process_message_with_llm(message, client)
-    else:
-        await client.process_commands(message)
-
-@client.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        await ctx.send("Sorry, I didn't understand that command.")
-    else:
-        tb = traceback.format_exception(type(error), error, error.__traceback__)
-        tb_str = "".join(tb)
-        print(f'An error occurred: {error}\n{tb_str}')
 
 '''This code attempts to run the Discord client with a token retrieved from the environment variables.'''
 try:
