@@ -18,7 +18,7 @@ async def get_guild(client):
 async def get_notification_channel(guild):
     notification_channel = guild.get_channel(CHANNEL_ID)
     if notification_channel is None:
-        print("Notification channel not found. Make sure the channel ID is correct.")
+        pass
     return notification_channel
 
 async def manage_roles(member, appropriate_role, is_upgrade, notification_channel):
