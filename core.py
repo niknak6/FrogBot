@@ -32,14 +32,17 @@ client = commands.Bot(command_prefix='//', intents=intents, command_sync_flags=c
 '''Loads all the cogs from the 'modules' directory into the bot.'''
 if __name__ == "__main__":
     def load_module(file_path, name):
-        spec = importlib.util.spec_from_file_location(name, file_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        for attr_name in dir(module):
-            attr = getattr(module, attr_name)
-            if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
-                client.add_cog(attr(client))
-                print(f"Imported cog: {attr.__name__}")
+        try:
+            spec = importlib.util.spec_from_file_location(name, file_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
+                    client.add_cog(attr(client))
+                    print(f"Imported cog: {attr.__name__}")
+        except Exception as e:
+            print(f"Error loading module {name}: {e}")
 
     cogs_dir = "modules"
     with ThreadPoolExecutor() as executor:
@@ -99,6 +102,29 @@ async def update(ctx: disnake.ApplicationCommandInteraction, branch="beta", rest
             await restart_bot(ctx)
     except Exception as e:
         await ctx.send(f'Error updating the script: {e}')
+
+@client.slash_command(description = "Shut down the bot.")
+@is_admin_or_user()
+async def shutdown(ctx: disnake.ApplicationCommandInteraction):
+    await ctx.response.send_message(
+        "Are you sure you want to shut down the bot?",
+        components=[
+            disnake.ui.Button(label="Yes", style=disnake.ButtonStyle.success, custom_id="shutdown_yes"),
+            disnake.ui.Button(label="No", style=disnake.ButtonStyle.danger, custom_id="shutdown_no"),
+        ],
+        ephemeral=True
+    )
+
+@client.listen("on_button_click")
+@is_admin_or_user()
+async def shutdown_listener(inter: disnake.MessageInteraction):
+    if inter.component.custom_id not in ["shutdown_yes", "shutdown_no"]:
+        return
+    if inter.component.custom_id == "shutdown_yes":
+        await inter.response.send_message("Shutting down...", ephemeral=True)
+        await inter.bot.close()
+    elif inter.component.custom_id == "shutdown_no":
+        await inter.response.send_message("Bot shutdown canceled.", ephemeral=True)
 
 async def restart_bot(ctx):
     global restart_channel_id
