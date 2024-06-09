@@ -1,14 +1,13 @@
-import datetime
-import asyncio
-from contextlib import suppress
+# modules.emoji
 
-import disnake
-from disnake.ext import commands
 from disnake import Button, ButtonStyle, ActionRow, Interaction, Embed, ChannelType
-from disnake.ui import Button
-
 from modules.utils.database import db_access_with_retry, update_points
 from modules.roles import check_user_points
+from disnake.ext import commands
+from contextlib import suppress
+import datetime
+import asyncio
+import disnake
 
 bot_replies = {}
 
@@ -80,19 +79,21 @@ class EmojiCog(commands.Cog):
         thread_id = message.thread.id
         guild = self.bot.get_guild(payload.guild_id)
         thread = disnake.utils.get(guild.threads, id=thread_id)
-        embed = Embed(title="Resolution of Request/Report",
-                      description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
-                      color=0x3498db)
+        embed = Embed(
+            title="Resolution of Request/Report",
+            description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
+            color=0x3498db
+        )
         embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
-        action_row = ActionRow(Button(style=ButtonStyle.success, label="Yes", custom_id=f"yes_{thread_id}"), Button(style=ButtonStyle.danger, label="No", custom_id=f"no_{thread_id}"))
+        action_row = disnake.ui.ActionRow(
+            disnake.ui.Button(style=ButtonStyle.green, label="Yes", custom_id=f"yes_{thread_id}"),
+            disnake.ui.Button(style=ButtonStyle.red, label="No", custom_id=f"no_{thread_id}")
+        )
         satisfaction_message = await channel.send(embed=embed, components=[action_row])
         db_access_with_retry(
             "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
             (message.id, original_poster_id, thread_id, satisfaction_message.id, payload.channel_id)
         )
-
-        def check(interaction: Interaction):
-            return interaction.user.id == original_poster_id
 
         async def send_reminder():
             await asyncio.sleep(43200)
@@ -101,10 +102,12 @@ class EmojiCog(commands.Cog):
         reminder_task = asyncio.create_task(send_reminder())
 
         try:
-            interaction = await self.bot.wait_for("interaction", timeout=86400, check=check)
-            thread = disnake.utils.get(guild.threads, id=thread_id)
+            interaction = await self.bot.wait_for("interaction", timeout=86400, check=lambda i: i.user.id == original_poster_id)
             if interaction.component.label == "Yes":
-                await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+                try:
+                    await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+                except disnake.errors.HTTPException:
+                    pass
                 if thread:
                     await thread.delete()
             else:
@@ -193,14 +196,17 @@ class EmojiCog(commands.Cog):
         interaction_states = db_access_with_retry("SELECT message_id, user_id, thread_id, satisfaction_message_id, channel_id FROM interactions")
         for state in interaction_states:
             message_id, user_id, thread_id, satisfaction_message_id, channel_id = state
-            await self.resume_interaction(message_id, user_id, thread_id, satisfaction_message_id, channel_id)
+            asyncio.create_task(self.resume_interaction(message_id, user_id, thread_id, satisfaction_message_id, channel_id))
 
     async def resume_interaction(self, message_id, user_id, thread_id, satisfaction_message_id, channel_id):
         channel = self.bot.get_channel(channel_id)
-        satisfaction_message = await channel.fetch_message(satisfaction_message_id)
-
-        def check(interaction: Interaction):
-            return interaction.user.id == user_id
+        if channel is None:
+            return
+        try:
+            satisfaction_message = await channel.fetch_message(satisfaction_message_id)
+        except Exception as e:
+            print(f"Error fetching message: {e}")
+            return
 
         async def send_reminder():
             await asyncio.sleep(43200)
@@ -209,7 +215,7 @@ class EmojiCog(commands.Cog):
         reminder_task = asyncio.create_task(send_reminder())
 
         try:
-            interaction = await self.bot.wait_for("interaction", timeout=86400, check=check)
+            interaction = await self.bot.wait_for("interaction", timeout=86400, check=lambda i: i.user.id == user_id)
             thread = disnake.utils.get(channel.guild.threads, id=thread_id)
             if hasattr(interaction, 'message') and interaction.message.id == satisfaction_message.id:
                 if interaction.component.label == "Yes":
