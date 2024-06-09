@@ -10,7 +10,7 @@ from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.llms import MessageRole as Role
 from modules.utils.commons import send_long_message
-from llama_index.agent.openai import OpenAIAgent
+from llama_index.core.agent import ReActAgent
 from llama_index.core.llms import ChatMessage
 from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
@@ -49,13 +49,13 @@ async def fetch_reply_chain(message, max_tokens=4096):
 
 load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
-Settings.llm = OpenAI(model="gpt-3.5-turbo", max_tokens=1000)
+Settings.llm = OpenAI(model="gpt-4o", max_tokens=1000)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("GPU available:", torch.cuda.is_available())
 Settings.embed_model = HuggingFaceEmbedding(model_name="avsolatorio/NoInstruct-small-Embedding-v0", device=device)
 
 connection_string = os.getenv('POSTGRES_CONNECTION_STRING')
-db_name, url = "bot_vector_db", make_url(connection_string)
+db_name, url = "bot_connect", make_url(connection_string)
 embed_dim = 384
 
 search_spec = DuckDuckGoSearchToolSpec()
@@ -106,11 +106,12 @@ def create_query_engine(collection_name, tool_name, description):
 
 collections = {
     "discord": {"tool_name": "Discord_Tool", "description": "Data from Discord related to the OpenPilot community."},
-    "FrogAi-FrogPilot": {"tool_name": "FrogPilot_Tool", "description": "Documentation, settings and source code for FrogPilot/OpenPilot."},
+    "FrogAi-FrogPilot": {"tool_name": "OpenPilot_code", "description": "This contains the settings and source code for FrogPilot/OpenPilot."},
     "twilsonco-openpilot": {"tool_name": "NNFF_Tool", "description": "Explanation and analysis of Neural Network FeedForward (NNFF) in OpenPilot. More details: https://github.com/twilsonco/openpilot/tree/log-info"},
     "commaai-openpilot-docs": {"tool_name": "OpenPilot_Docs_Tool", "description": "Official OpenPilot documentation."},
     "commaai-comma10k": {"tool_name": "Comma10k_Tool", "description": "Comma10k dataset and related information."},
     "wiki": {"tool_name": "Wiki_Tool", "description": "Data from the OpenPilot wiki."},
+    "commaai-comma-api": {"tool_name": "CommaAPI_Tool", "description": "Comma Connect API documentation and related information."},
 }
 
 query_engine_tools = [create_query_engine(name, data["tool_name"], data["description"]) for name, data in collections.items()]
@@ -146,7 +147,7 @@ async def process_message_with_llm(message, client):
                     system_prompt += channel_prompts['bug-reports']
                 else:
                     system_prompt += channel_prompts['default']
-                chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, chat_history=chat_history)
+                chat_engine = ReActAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, max_iterations=20, chat_history=chat_history)
                 chat_history.append(ChatMessage(content=content, role="user"))
                 chat_response = await asyncio.to_thread(chat_engine.chat, content)
                 if not chat_response or not chat_response.response:

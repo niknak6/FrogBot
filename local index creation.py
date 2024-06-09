@@ -22,7 +22,7 @@ Settings.embed_model = HuggingFaceEmbedding(model_name="avsolatorio/NoInstruct-s
 
 '''POSTGRES DATABASE CREATION'''
 connection_string = os.getenv('POSTGRES_CONNECTION_STRING')
-db_name = "bot_vector_db"
+db_name = "bot_connect"
 conn = psycopg2.connect(connection_string)
 conn.autocommit = True
 with conn.cursor() as c:
@@ -90,6 +90,13 @@ repos_config = [
         "repo": "openpilot-docs",
         "branch": "gh-pages",
         "filter_directories": (["docs"], GithubRepositoryReader.FilterType.INCLUDE),
+        "filter_file_extensions": ([".s"], GithubRepositoryReader.FilterType.EXCLUDE),
+    },
+    {
+        "owner": "commaai",
+        "repo": "comma-api",
+        "branch": "master",
+        "filter_directories": ([""], GithubRepositoryReader.FilterType.INCLUDE),
         "filter_file_extensions": ([".s"], GithubRepositoryReader.FilterType.EXCLUDE),
     },
     {
