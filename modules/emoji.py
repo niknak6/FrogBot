@@ -85,18 +85,15 @@ class EmojiCog(commands.Cog):
             color=0x3498db
         )
         embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
-        action_row = ActionRow(
-            disnake.ui.Button(style=ButtonStyle.success, label="Yes", custom_id=f"yes_{thread_id}"),
-            disnake.ui.Button(style=ButtonStyle.danger, label="No", custom_id=f"no_{thread_id}")
+        action_row = disnake.ui.ActionRow(
+            disnake.ui.Button(style=ButtonStyle.green, label="Yes", custom_id=f"yes_{thread_id}"),
+            disnake.ui.Button(style=ButtonStyle.red, label="No", custom_id=f"no_{thread_id}")
         )
         satisfaction_message = await channel.send(embed=embed, components=[action_row])
         db_access_with_retry(
             "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
             (message.id, original_poster_id, thread_id, satisfaction_message.id, payload.channel_id)
         )
-
-        def check(interaction: Interaction):
-            return interaction.user.id == original_poster_id
 
         async def send_reminder():
             await asyncio.sleep(43200)
@@ -105,9 +102,12 @@ class EmojiCog(commands.Cog):
         reminder_task = asyncio.create_task(send_reminder())
 
         try:
-            interaction = await self.bot.wait_for("interaction", timeout=86400, check=check)
+            interaction = await self.bot.wait_for("interaction", timeout=86400, check=lambda i: i.user.id == original_poster_id)
             if interaction.component.label == "Yes":
-                await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+                try:
+                    await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+                except disnake.errors.HTTPException:
+                    pass
                 if thread:
                     await thread.delete()
             else:
