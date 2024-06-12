@@ -57,6 +57,7 @@ class ThreadCreateCog(commands.Cog):
                     "- Are you on the “FrogPilot” or “FrogPilot-Staging” branch?\n"
                     "- Was there an error in the error log? You can find this in the “Software” panel!\n"
                     "- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in “Fleet Manager” in the “Tools” section!\n"
+                    "If you need help with any of these steps, please let me know by replying to this message!"
                 )
                 view = self.ConfirmationView(message, original_message.author.id)
                 await message.edit(view=view)
