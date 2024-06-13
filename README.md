@@ -16,10 +16,7 @@
 
 ## Branches
 - **🔥 Beta:** This is the most updated branch and is constantly being updated and may break.
-- **🛠️ Dev:** A go-to point for PRs and other contributions, it's the more stable of the newer branches but not immune to breaking.
 - **🕰️ Old:** This is the first revision of the bot; there are a few broken things with it, and we wouldn't recommend using it.
-
-*Note: Dev is considered the starting point for most people, as it's primarily for PRs, and we aim to keep it stable.*
 
 ## 🚀 Current Features
 - Drag and Dop-in Cogs
