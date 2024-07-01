@@ -104,9 +104,6 @@ class EmojiCog(commands.Cog):
         try:
             interaction = await self.bot.wait_for("interaction", timeout=86400, check=lambda i: i.user.id == original_poster_id)
             if interaction.component.label == "Yes":
-                try:
-                    except disnake.errors.HTTPException:
-                        pass
                 if thread:
                     await thread.delete()
             else:
