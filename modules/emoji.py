@@ -105,7 +105,6 @@ class EmojiCog(commands.Cog):
             interaction = await self.bot.wait_for("interaction", timeout=86400, check=lambda i: i.user.id == original_poster_id)
             if interaction.component.label == "Yes":
                 try:
-                    await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
                 except disnake.errors.HTTPException:
                     pass
                 if thread:
