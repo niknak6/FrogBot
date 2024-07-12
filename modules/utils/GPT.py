@@ -148,7 +148,7 @@ async def process_message_with_llm(message, client):
                     system_prompt += channel_prompts['bug-reports']
                 else:
                     system_prompt += channel_prompts['default']
-                chat_engine = ReActAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, max_iterations=20, chat_history=chat_history)
+                chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, max_iterations=20, chat_history=chat_history)
                 chat_history.append(ChatMessage(content=content, role="user"))
                 chat_response = await asyncio.to_thread(chat_engine.chat, content)
                 if not chat_response or not chat_response.response:
