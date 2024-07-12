@@ -4,7 +4,7 @@ from llama_index.core import VectorStoreIndex, Settings, StorageContext, SimpleD
 from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
-from llama_index.readers.file import CSVReader
+from llama_index.readers.file import PandasCSVReader
 from sqlalchemy import make_url
 from dotenv import load_dotenv
 from tqdm import tqdm
@@ -73,7 +73,7 @@ wiki_index = VectorStoreIndex.from_documents(wiki_docs, storage_context=wiki_sto
 print("Wiki index setup complete.")
 
 '''COMMIT DATA'''
-parser = CSVReader()
+parser = PandasCSVReader()
 file_extractor = {".csv": parser}
 reader = SimpleDirectoryReader(input_dir="CommitHistory", file_extractor=file_extractor)
 commit_docs = reader.load_data()

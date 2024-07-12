@@ -51,7 +51,7 @@ async def fetch_reply_chain(message, max_tokens=4096):
 
 load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
-Settings.llm = OpenAI(model="gpt-3.5-turbo", max_tokens=1000)
+Settings.llm = OpenAI(model="gpt-4o", max_tokens=1000)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("GPU available:", torch.cuda.is_available())
 Settings.embed_model = HuggingFaceEmbedding(model_name="avsolatorio/NoInstruct-small-Embedding-v0", device=device)
