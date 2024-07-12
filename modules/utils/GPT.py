@@ -93,7 +93,7 @@ def create_query_engine(collection_name, tool_name, description):
         [index.as_retriever(vector_store_query_mode="default", similarity_top_k=5),
          index.as_retriever(vector_store_query_mode="sparse", similarity_top_k=12)],
         similarity_top_k=5,
-        num_queries=1,
+        num_queries=2,
         mode="relative_score",
     )
     tool = QueryEngineTool(
@@ -110,7 +110,7 @@ collections = {
     "openpilot-code": {"tool_name": "OpenPilot_code", "description": "This contains the source code for openpilot."},
     "twilsonco-openpilot": {"tool_name": "NNFF_Tool", "description": "Explanation and analysis of Neural Network FeedForward (NNFF) in OpenPilot. More details: https://github.com/twilsonco/openpilot/tree/log-info"},
     "commaai-openpilot-docs": {"tool_name": "OpenPilot_Docs_Tool", "description": "Official OpenPilot documentation."},
-    "wiki": {"tool_name": "Wiki_Tool", "description": "The FrogPilot wiki, this contains FrogPilot data such as settings for FrogPilot. This data is a WIP."},
+    "wiki": {"tool_name": "Wiki_Tool", "description": "This contains FrogPilot data such as settings for FrogPilot. This data is a WIP."},
     "commaai-comma-api": {"tool_name": "CommaAPI_Tool", "description": "Comma Connect API documentation and related information."},
 }
 
