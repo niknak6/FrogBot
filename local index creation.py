@@ -4,7 +4,6 @@ from llama_index.core import VectorStoreIndex, Settings, StorageContext, SimpleD
 from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
-from llama_index.readers.web import WholeSiteReader
 from sqlalchemy import make_url
 from dotenv import load_dotenv
 from tqdm import tqdm
@@ -54,12 +53,8 @@ discord_index = VectorStoreIndex.from_documents(discord_docs, storage_context=di
 print("Discord data setup complete.")
 
 '''WIKI DATA'''
-scraper = WholeSiteReader(
-    prefix="https://github.com/commaai/openpilot/wiki/", max_depth=2
-)
-wiki = scraper.load_data(
-    base_url="https://github.com/commaai/openpilot/wiki"
-)
+reader = SimpleDirectoryReader(input_dir="FrogWiki")
+wiki_docs = reader.load_data()
 print("Wiki data downloaded successfully. Setting up vector store for wiki...")
 wiki_vector_store = PGVectorStore.from_params(
     database=db_name,
@@ -73,7 +68,7 @@ wiki_vector_store = PGVectorStore.from_params(
     text_search_config="english",
 )
 wiki_storage_context = StorageContext.from_defaults(vector_store=wiki_vector_store)
-wiki_index = VectorStoreIndex.from_documents(wiki, storage_context=wiki_storage_context, show_progress=True)
+wiki_index = VectorStoreIndex.from_documents(wiki_docs, storage_context=wiki_storage_context, show_progress=True)
 print("Wiki index setup complete.")
 
 '''GITHUB DATA'''
@@ -101,15 +96,8 @@ repos_config = [
     },
     {
         "owner": "commaai",
-        "repo": "comma10k",
-        "branch": "master",
-        "filter_directories": (["imgs", "imgs2", "imgsd", "masks", "masks2", "masksd"], GithubRepositoryReader.FilterType.EXCLUDE),
-        "filter_file_extensions": ([".png", ".jpg"], GithubRepositoryReader.FilterType.EXCLUDE),
-    },
-    {
-        "owner": "FrogAi",
-        "repo": "FrogPilot",
-        "branch": "FrogPilot-Development",
+        "repo": "openpilot",
+        "branch": "master-ci",
         "filter_directories": (["selfdrive", "README.md", "docs", "tools"], GithubRepositoryReader.FilterType.INCLUDE),
         "filter_file_extensions": ([".py", ".md", ".h", ".cc"], GithubRepositoryReader.FilterType.INCLUDE),
     },

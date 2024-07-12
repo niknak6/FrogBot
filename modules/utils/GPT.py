@@ -107,11 +107,10 @@ def create_query_engine(collection_name, tool_name, description):
 
 collections = {
     "discord": {"tool_name": "Discord_Tool", "description": "Data from Discord related to the OpenPilot community."},
-    "FrogAi-FrogPilot": {"tool_name": "OpenPilot_code", "description": "This contains the settings and source code for FrogPilot/OpenPilot."},
+    "openpilot-code": {"tool_name": "OpenPilot_code", "description": "This contains the source code for openpilot."},
     "twilsonco-openpilot": {"tool_name": "NNFF_Tool", "description": "Explanation and analysis of Neural Network FeedForward (NNFF) in OpenPilot. More details: https://github.com/twilsonco/openpilot/tree/log-info"},
     "commaai-openpilot-docs": {"tool_name": "OpenPilot_Docs_Tool", "description": "Official OpenPilot documentation."},
-    "commaai-comma10k": {"tool_name": "Comma10k_Tool", "description": "Comma10k dataset and related information."},
-    "wiki": {"tool_name": "Wiki_Tool", "description": "Data from the OpenPilot wiki."},
+    "wiki": {"tool_name": "Wiki_Tool", "description": "Data from the FrogPilot wiki, such as settings. This data is a WIP."},
     "commaai-comma-api": {"tool_name": "CommaAPI_Tool", "description": "Comma Connect API documentation and related information."},
 }
 
