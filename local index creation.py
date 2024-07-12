@@ -104,13 +104,6 @@ repos_config = [
     },
     {
         "owner": "commaai",
-        "repo": "openpilot-docs",
-        "branch": "gh-pages",
-        "filter_directories": (["docs"], GithubRepositoryReader.FilterType.INCLUDE),
-        "filter_file_extensions": ([".s"], GithubRepositoryReader.FilterType.EXCLUDE),
-    },
-    {
-        "owner": "commaai",
         "repo": "comma-api",
         "branch": "master",
         "filter_directories": ([""], GithubRepositoryReader.FilterType.INCLUDE),
@@ -120,7 +113,7 @@ repos_config = [
         "owner": "commaai",
         "repo": "openpilot",
         "branch": "master-ci",
-        "filter_directories": (["selfdrive", "tools"], GithubRepositoryReader.FilterType.INCLUDE),
+        "filter_directories": (["selfdrive", "docs", "tools"], GithubRepositoryReader.FilterType.INCLUDE),
         "filter_file_extensions": ([".py", ".md", ".h", ".cc"], GithubRepositoryReader.FilterType.INCLUDE),
     },
 ]
@@ -147,7 +140,7 @@ for config in tqdm(repos_config, desc="Loading documents from repositories"):
             password=url.password,
             port=url.port,
             user=url.username,
-            table_name=f"{config['owner']}-{config['repo']}",
+            table_name=f"{config['owner']}-{config['repo']}_docs",
             embed_dim=embed_dim,
             hybrid_search=True,
             text_search_config="english",

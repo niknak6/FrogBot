@@ -83,7 +83,7 @@ def create_query_engine(collection_name, tool_name, description):
         password=url.password,
         port=url.port,
         user=url.username,
-        table_name=f"{collection_name}",
+        table_name=f"{collection_name}_docs",
         embed_dim=embed_dim,
         hybrid_search=True,
         text_search_config="english",
