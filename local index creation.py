@@ -4,6 +4,7 @@ from llama_index.core import VectorStoreIndex, Settings, StorageContext, SimpleD
 from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
+from llama_index.readers.file import CSVReader
 from sqlalchemy import make_url
 from dotenv import load_dotenv
 from tqdm import tqdm
@@ -71,6 +72,27 @@ wiki_storage_context = StorageContext.from_defaults(vector_store=wiki_vector_sto
 wiki_index = VectorStoreIndex.from_documents(wiki_docs, storage_context=wiki_storage_context, show_progress=True)
 print("Wiki index setup complete.")
 
+'''COMMIT DATA'''
+parser = CSVReader()
+file_extractor = {".csv": parser}
+reader = SimpleDirectoryReader(input_dir="CommitHistory", file_extractor=file_extractor)
+commit_docs = reader.load_data()
+print("commit data downloaded successfully. Setting up vector store for commit...")
+commit_vector_store = PGVectorStore.from_params(
+    database=db_name,
+    host=url.host,
+    password=url.password,
+    port=url.port,
+    user=url.username,
+    table_name="commit_history",
+    embed_dim=embed_dim,
+    hybrid_search=True,
+    text_search_config="english",
+)
+commit_storage_context = StorageContext.from_defaults(vector_store=commit_vector_store)
+commit_index = VectorStoreIndex.from_documents(commit_docs, storage_context=commit_storage_context, show_progress=True)
+print("commit index setup complete.")
+
 '''GITHUB DATA'''
 repos_config = [
     {
@@ -98,7 +120,7 @@ repos_config = [
         "owner": "commaai",
         "repo": "openpilot",
         "branch": "master-ci",
-        "filter_directories": (["selfdrive", "README.md", "docs", "tools"], GithubRepositoryReader.FilterType.INCLUDE),
+        "filter_directories": (["selfdrive", "tools"], GithubRepositoryReader.FilterType.INCLUDE),
         "filter_file_extensions": ([".py", ".md", ".h", ".cc"], GithubRepositoryReader.FilterType.INCLUDE),
     },
 ]
@@ -125,7 +147,7 @@ for config in tqdm(repos_config, desc="Loading documents from repositories"):
             password=url.password,
             port=url.port,
             user=url.username,
-            table_name=f"{config['owner']}-{config['repo']}_docs",
+            table_name=f"{config['owner']}-{config['repo']}",
             embed_dim=embed_dim,
             hybrid_search=True,
             text_search_config="english",
