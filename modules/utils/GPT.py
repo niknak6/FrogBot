@@ -110,7 +110,7 @@ collections = {
     "openpilot-code": {"tool_name": "OpenPilot_code", "description": "This contains the source code for openpilot."},
     "twilsonco-openpilot": {"tool_name": "NNFF_Tool", "description": "Explanation and analysis of Neural Network FeedForward (NNFF) in OpenPilot. More details: https://github.com/twilsonco/openpilot/tree/log-info"},
     "commaai-openpilot-docs": {"tool_name": "OpenPilot_Docs_Tool", "description": "Official OpenPilot documentation."},
-    "wiki": {"tool_name": "Wiki_Tool", "description": "Data from the FrogPilot wiki, such as settings. This data is a WIP."},
+    "wiki": {"tool_name": "Wiki_Tool", "description": "The FrogPilot wiki, this contains FrogPilot data such as settings for FrogPilot. This data is a WIP."},
     "commaai-comma-api": {"tool_name": "CommaAPI_Tool", "description": "Comma Connect API documentation and related information."},
 }
 
@@ -139,9 +139,10 @@ async def process_message_with_llm(message, client):
                     )
                 }
                 system_prompt = (
-                    f"Assistant: '{client.user}'. Channel: '{message.channel}'. Server: '{message.guild}'. User: '{message.author}'. "
-                    "Provide accurate information and support as an OpenPilot community assistant. "
-                    "Respond appropriately to the conversation context. Avoid code interaction instructions unless asked. Examine code for answers. "
+                    f"You are '{client.user}', assisting '{message.author}' in the '{message.channel}' of the '{message.guild}' server. "
+                    "Keep all information relevant to this server and context. Provide accurate support as an OpenPilot community assistant. "
+                    "Respond appropriately to the conversation context. Avoid giving code interaction instructions unless specifically asked. "
+                    "Examine code for answers when necessary. Use the provided tools to give comprehensive responses and maintain respectfulness throughout the interaction."
                 )
                 if hasattr(message.channel, 'parent_id') and message.channel.parent_id == 1162100167110053888:
                     system_prompt += channel_prompts['bug-reports']
