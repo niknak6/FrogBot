@@ -17,6 +17,7 @@ from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
 from sqlalchemy import make_url
 from dotenv import load_dotenv
+import nest_asyncio
 import traceback
 import asyncio
 import openai
@@ -116,7 +117,7 @@ collections = {
 
 query_engine_tools = [create_query_engine(name, data["tool_name"], data["description"]) for name, data in collections.items()]
 query_engine_tools.extend(s_tools.values())
-
+nest_asyncio.apply()
 async def process_message_with_llm(message, client):
     content = message.content.replace(client.user.mention, '').strip()
     if content:
