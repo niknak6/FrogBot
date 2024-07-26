@@ -2,6 +2,11 @@
 
 # Ignore files and directories
 __pycache__/
+.venv/
+.vscode/
+CommitHistory/
+.github/
+FrogWiki/
 .env
 bot.bat
 prompt.bat

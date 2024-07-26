@@ -244,18 +244,27 @@ class EmojiCog(commands.Cog):
     @commands.Cog.listener()
     async def on_button_click(self, interaction: Interaction):
         custom_id = interaction.component.custom_id
-        if custom_id.startswith("yes_") or custom_id.startswith("no_"):
-            thread_id = int(custom_id.split("_")[1])
-            thread = disnake.utils.get(interaction.guild.threads, id=thread_id)
-            if custom_id.startswith("yes_"):
-                await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
-                if thread:
-                    await thread.delete()
-            else:
-                await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
-                await interaction.message.delete()
+        thread_id = int(custom_id.split("_")[1])
+        interaction_data = db_access_with_retry("SELECT user_id FROM interactions WHERE thread_id = ?", (thread_id,))
+        if not interaction_data:
+            await interaction.response.send_message("Error: No interaction data found.", ephemeral=True)
+            return
+        original_poster_id = interaction_data[0][0]
 
-            db_access_with_retry("DELETE FROM interactions WHERE thread_id = ?", (thread_id,))
+        if interaction.user.id != original_poster_id:
+            await interaction.response.send_message("Only the thread creator can interact with these buttons.", ephemeral=True)
+            return
+
+        thread = disnake.utils.get(interaction.guild.threads, id=thread_id)
+        if custom_id.startswith("yes_"):
+            await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+            if thread:
+                await thread.delete()
+        else:
+            await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+            await interaction.message.delete()
+
+        db_access_with_retry("DELETE FROM interactions WHERE thread_id = ?", (thread_id,))
 
 def setup(bot):
     bot.add_cog(EmojiCog(bot))

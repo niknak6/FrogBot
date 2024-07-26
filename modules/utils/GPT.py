@@ -7,21 +7,20 @@ from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.vector_stores.postgres import PGVectorStore
+from sqlalchemy.orm import sessionmaker, scoped_session
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.llms import MessageRole as Role
+from sqlalchemy import create_engine, make_url, text
 from modules.utils.commons import send_long_message
 from llama_index.agent.openai import OpenAIAgent
-from llama_index.core.agent import ReActAgent
 from llama_index.core.llms import ChatMessage
 from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
-from sqlalchemy import make_url
 from dotenv import load_dotenv
 import nest_asyncio
 import traceback
 import asyncio
 import openai
-import torch
 import os
 
 class HistoryChatMessage:
@@ -52,20 +51,18 @@ async def fetch_reply_chain(message, max_tokens=4096):
 load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
 Settings.llm = OpenAI(model="gpt-4o", max_tokens=1000)
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print("GPU available:", torch.cuda.is_available())
-Settings.embed_model = HuggingFaceEmbedding(model_name="avsolatorio/NoInstruct-small-Embedding-v0", device=device)
+Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
 
 connection_string = os.getenv('POSTGRES_CONNECTION_STRING')
 db_name, url = "bot_connect", make_url(connection_string)
 embed_dim = 384
 
+sites = ["comma.ai", "oneclone.net", "springerelectronics.com", "shop.retropilot.org"]
 search_spec = DuckDuckGoSearchToolSpec()
 def site_search(input, site):
     query = input if isinstance(input, str) else input.get('query')
     return search_spec.duckduckgo_full_search(query=f"{query} site:{site}")
 
-sites = ["comma.ai", "oneclone.net", "springerelectronics.com", "shop.retropilot.org"]
 s_tools = {
     site: FunctionTool.from_defaults(
         fn=lambda input, site=site: site_search(input, site),
@@ -76,48 +73,92 @@ s_tools = {
     ) for site in sites
 }
 
-def create_query_engine(collection_name, tool_name, description):
-    vector_store = PGVectorStore.from_params(
-        database=db_name,
-        host=url.host,
-        password=url.password,
-        port=url.port,
-        user=url.username,
-        table_name=f"{collection_name}_docs",
-        embed_dim=embed_dim,
-        hybrid_search=True,
-        text_search_config="english",
-        cache_ok=True,
-    )
-    index = VectorStoreIndex.from_vector_store(vector_store)
-    retriever = QueryFusionRetriever(
-        [index.as_retriever(vector_store_query_mode="default", similarity_top_k=5),
-         index.as_retriever(vector_store_query_mode="sparse", similarity_top_k=12)],
-        similarity_top_k=5,
-        num_queries=2,
-        mode="relative_score",
-    )
-    tool = QueryEngineTool(
-        query_engine=RetrieverQueryEngine(
-            retriever=retriever,
-            response_synthesizer=CompactAndRefine(),
-        ),
-        metadata=ToolMetadata(name=tool_name, description=description),
-    )
+def get_engine(connection_string):
+    return create_engine(connection_string, pool_size=10, max_overflow=20)
+
+def get_session(engine):
+    session_factory = sessionmaker(bind=engine)
+    return scoped_session(session_factory)
+
+engine = get_engine(connection_string)
+
+# Ensure schemas exist
+def ensure_schema_exists(engine, schema_name):
+    with engine.connect() as conn:
+        conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
+
+def create_query_engine(collection_name, tool_name, description, connection_string, schema_name):
+    ensure_schema_exists(engine, schema_name)
+
+    def setup_search_path(connection):
+        connection.execute(text(f'SET search_path TO "{schema_name}"'))
+    
+    with engine.connect() as conn:
+        setup_search_path(conn)
+        vector_store = PGVectorStore.from_params(
+            database=db_name,
+            host=url.host,
+            password=url.password,
+            port=url.port,
+            user=url.username,
+            table_name=f"{collection_name}_docs",
+            embed_dim=embed_dim,
+            hybrid_search=True,
+            text_search_config="english",
+            cache_ok=True,
+        )
+        index = VectorStoreIndex.from_vector_store(vector_store)
+        retriever = QueryFusionRetriever(
+            [index.as_retriever(vector_store_query_mode="default", similarity_top_k=5),
+             index.as_retriever(vector_store_query_mode="sparse", similarity_top_k=12)],
+            similarity_top_k=5,
+            num_queries=2,
+            mode="relative_score",
+        )
+        tool = QueryEngineTool(
+            query_engine=RetrieverQueryEngine(
+                retriever=retriever,
+                response_synthesizer=CompactAndRefine(),
+            ),
+            metadata=ToolMetadata(name=tool_name, description=description),
+        )
     return tool
 
-collections = {
-    "discord": {"tool_name": "Discord_Tool", "description": "Data from Discord related to the OpenPilot community."},
-    "openpilot-code": {"tool_name": "OpenPilot_code", "description": "This contains the source code for openpilot."},
-    "twilsonco-openpilot": {"tool_name": "NNFF_Tool", "description": "Explanation and analysis of Neural Network FeedForward (NNFF) in OpenPilot. More details: https://github.com/twilsonco/openpilot/tree/log-info"},
-    "commaai-openpilot-docs": {"tool_name": "OpenPilot_Docs_Tool", "description": "Official OpenPilot documentation."},
-    "wiki": {"tool_name": "Wiki_Tool", "description": "This contains FrogPilot data such as settings for FrogPilot. This data is a WIP."},
-    "commaai-comma-api": {"tool_name": "CommaAPI_Tool", "description": "Comma Connect API documentation and related information."},
+tools_schemas = {
+    "OpenPilot_code": "schema_commaai_openpilot",
+    "NNFF_Tool": "schema_twilsonco_openpilot",
+    "commit_data": "schema_commit",
+    "Wiki_Tool": "schema_wiki",
 }
 
-query_engine_tools = [create_query_engine(name, data["tool_name"], data["description"]) for name, data in collections.items()]
+collections = {
+    "commaai_openpilot": {
+        "tool_name": "OpenPilot_code",
+        "description": "This collection contains the complete source code for OpenPilot, an open-source driving agent that performs the functions of Adaptive Cruise Control (ACC) and Lane Keeping Assist System (LKAS) for various car models."
+    },
+    "twilsonco_openpilot": {
+        "tool_name": "NNFF_Tool",
+        "description": "This tool provides an in-depth explanation and analysis of the Neural Network FeedForward (NNFF) mechanism used in OpenPilot. It includes detailed documentation and examples to help understand how NNFF is implemented and utilized in the OpenPilot system. More details can be found at: https://github.com/twilsonco/openpilot/tree/log-info"
+    },
+    "commit": {
+        "tool_name": "commit_data",
+        "description": "This collection contains the commit history of the FrogPilot codebase. It provides detailed information about each commit, including changes made, authorship, and timestamps, allowing for comprehensive tracking of the project's development over time."
+    },
+    "wiki": {
+        "tool_name": "Wiki_Tool",
+        "description": "This is the main wiki for FrogPilot, containing extensive data and documentation such as settings, configuration guides, and usage instructions. This data is a work in progress (WIP) and is continuously updated to provide the most accurate and helpful information for users."
+    },
+}
+
+connection_string = os.getenv('POSTGRES_CONNECTION_STRING')
+
+query_engine_tools = [
+    create_query_engine(name, data["tool_name"], data["description"], connection_string, tools_schemas[data["tool_name"]])
+    for name, data in collections.items()
+]
 query_engine_tools.extend(s_tools.values())
 nest_asyncio.apply()
+
 async def process_message_with_llm(message, client):
     content = message.content.replace(client.user.mention, '').strip()
     if content:
