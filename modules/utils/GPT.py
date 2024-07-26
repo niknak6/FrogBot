@@ -115,7 +115,7 @@ async def process_message_with_llm(message, client):
                 'default': (
                     "Provide accurate responses using server and channel names. "
                     "Give context and related information. Use available tools. "
-                    "Maintain respectfulness. If an unknown acronym is encountered, use Discord_Tool to find its meaning and then perform another search with the newly found information. "
+                    "Maintain respectfulness. If an unknown acronym is encountered, use Wiki_Tool to find its meaning and then perform another search with the newly found information. "
                     "Provide source links. Use multiple tools for comprehensive responses."
                 )
             }
