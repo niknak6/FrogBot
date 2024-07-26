@@ -4,10 +4,9 @@ from llama_index.core import VectorStoreIndex, Settings, StorageContext, SimpleD
 from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
-from sqlalchemy.orm import sessionmaker, scoped_session
 from llama_index.readers.file import PandasCSVReader
-from sqlalchemy import create_engine, make_url, text
-from llama_index.readers.web import WholeSiteReader
+from sqlalchemy import create_engine, MetaData, make_url, text
+from sqlalchemy.orm import sessionmaker, scoped_session
 from dotenv import load_dotenv
 from tqdm import tqdm
 import psycopg2
@@ -72,8 +71,8 @@ def setup_vector_store(engine, schema_name, table_name, docs):
     return index
 
 '''WIKI DATA'''
-scraper = WholeSiteReader(prefix="https://frogpilot.wiki.gg/", max_depth=1)
-wiki_docs = scraper.load_data(base_url="https://frogpilot.wiki.gg/wiki/Special:AllPages")
+reader = SimpleDirectoryReader(input_dir="FrogWiki")
+wiki_docs = reader.load_data()
 print("Wiki data downloaded successfully. Setting up vector store for wiki...")
 wiki_index = setup_vector_store(engine, "schema_wiki", "wiki_docs", wiki_docs)
 print("Wiki index setup complete.")
