@@ -17,6 +17,7 @@ from llama_index.core.llms import ChatMessage
 from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
 from dotenv import load_dotenv
+import nest_asyncio
 import traceback
 import asyncio
 import openai
@@ -156,6 +157,7 @@ query_engine_tools = [
     for name, data in collections.items()
 ]
 query_engine_tools.extend(s_tools.values())
+nest_asyncio.apply()
 
 async def process_message_with_llm(message, client):
     content = message.content.replace(client.user.mention, '').strip()
