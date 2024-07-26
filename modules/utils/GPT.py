@@ -1,23 +1,17 @@
 # modules.utils.GPT
 
 from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
-from llama_index.core.response_synthesizers import CompactAndRefine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
-from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.retrievers import QueryFusionRetriever
-from llama_index.vector_stores.postgres import PGVectorStore
-from sqlalchemy.orm import sessionmaker, scoped_session
+from llama_index.vector_stores.duckdb import DuckDBVectorStore
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.llms import MessageRole as Role
-from sqlalchemy import create_engine, make_url, text
 from modules.utils.commons import send_long_message
 from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.llms import ChatMessage
 from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
 from dotenv import load_dotenv
-import nest_asyncio
 import traceback
 import asyncio
 import openai
@@ -32,17 +26,16 @@ class HistoryChatMessage:
 
 async def fetch_reply_chain(message, max_tokens=4096):
     context, tokens_used = [], 0
-    max_tokens -= len(message.content) // 4
-    while message.reference and tokens_used < max_tokens:
+    remaining_tokens = max_tokens - len(message.content) // 4
+    while message.reference and tokens_used < remaining_tokens:
         try:
             message = await message.channel.fetch_message(message.reference.message_id)
             role = Role.ASSISTANT if message.author.bot else Role.USER
             message_tokens = len(message.content) // 4
-            if tokens_used + message_tokens <= max_tokens:
-                context.append(HistoryChatMessage(f"{message.content}\n", role, message.author.name if not message.author.bot else None))
-                tokens_used += message_tokens
-            else:
-                break
+            if tokens_used + message_tokens > remaining_tokens:
+                break  
+            context.append(HistoryChatMessage(f"{message.content}\n", role, message.author.name if not message.author.bot else None))
+            tokens_used += message_tokens
         except Exception as e:
             print(f"Error fetching reply chain message: {e}")
             break
@@ -50,19 +43,15 @@ async def fetch_reply_chain(message, max_tokens=4096):
 
 load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
-Settings.llm = OpenAI(model="gpt-4o", max_tokens=1000)
+Settings.llm = OpenAI(model="gpt-4o-mini", max_tokens=1000)
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
 
-connection_string = os.getenv('POSTGRES_CONNECTION_STRING')
-db_name, url = "bot_connect", make_url(connection_string)
-embed_dim = 384
-
-sites = ["comma.ai", "oneclone.net", "springerelectronics.com", "shop.retropilot.org"]
 search_spec = DuckDuckGoSearchToolSpec()
 def site_search(input, site):
     query = input if isinstance(input, str) else input.get('query')
     return search_spec.duckduckgo_full_search(query=f"{query} site:{site}")
 
+sites = ["comma.ai", "oneclone.net", "springerelectronics.com", "shop.retropilot.org"]
 s_tools = {
     site: FunctionTool.from_defaults(
         fn=lambda input, site=site: site_search(input, site),
@@ -73,63 +62,18 @@ s_tools = {
     ) for site in sites
 }
 
-def get_engine(connection_string):
-    return create_engine(connection_string, pool_size=10, max_overflow=20)
-
-def get_session(engine):
-    session_factory = sessionmaker(bind=engine)
-    return scoped_session(session_factory)
-
-engine = get_engine(connection_string)
-
-# Ensure schemas exist
-def ensure_schema_exists(engine, schema_name):
-    with engine.connect() as conn:
-        conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
-
-def create_query_engine(collection_name, tool_name, description, connection_string, schema_name):
-    ensure_schema_exists(engine, schema_name)
-
-    def setup_search_path(connection):
-        connection.execute(text(f'SET search_path TO "{schema_name}"'))
-    
-    with engine.connect() as conn:
-        setup_search_path(conn)
-        vector_store = PGVectorStore.from_params(
-            database=db_name,
-            host=url.host,
-            password=url.password,
-            port=url.port,
-            user=url.username,
-            table_name=f"{collection_name}_docs",
-            embed_dim=embed_dim,
-            hybrid_search=True,
-            text_search_config="english",
-            cache_ok=True,
-        )
-        index = VectorStoreIndex.from_vector_store(vector_store)
-        retriever = QueryFusionRetriever(
-            [index.as_retriever(vector_store_query_mode="default", similarity_top_k=5),
-             index.as_retriever(vector_store_query_mode="sparse", similarity_top_k=12)],
-            similarity_top_k=5,
-            num_queries=2,
-            mode="relative_score",
-        )
-        tool = QueryEngineTool(
-            query_engine=RetrieverQueryEngine(
-                retriever=retriever,
-                response_synthesizer=CompactAndRefine(),
-            ),
-            metadata=ToolMetadata(name=tool_name, description=description),
-        )
+def create_query_engine(collection_name, tool_name, description):
+    vector_store = DuckDBVectorStore(database_name=f"{collection_name}.duckdb", embed_dim=384, persist_dir="./db_files/")
+    index = VectorStoreIndex.from_vector_store(vector_store)
+    engine = index.as_query_engine()
+    tool = QueryEngineTool(
+        query_engine=engine,
+        metadata=ToolMetadata(
+            name=tool_name,
+            description=description,
+        ),
+    )
     return tool
-
-tools_schemas = {
-    "OpenPilot_code": "schema_commaai_openpilot",
-    "NNFF_Tool": "schema_twilsonco_openpilot",
-    "commit_data": "schema_commit",
-    "Wiki_Tool": "schema_wiki",
-}
 
 collections = {
     "commaai_openpilot": {
@@ -150,59 +94,55 @@ collections = {
     },
 }
 
-connection_string = os.getenv('POSTGRES_CONNECTION_STRING')
-
-query_engine_tools = [
-    create_query_engine(name, data["tool_name"], data["description"], connection_string, tools_schemas[data["tool_name"]])
-    for name, data in collections.items()
-]
+query_engine_tools = [create_query_engine(name, data["tool_name"], data["description"]) for name, data in collections.items()]
 query_engine_tools.extend(s_tools.values())
-nest_asyncio.apply()
 
 async def process_message_with_llm(message, client):
     content = message.content.replace(client.user.mention, '').strip()
-    if content:
-        try:
-            async with message.channel.typing():
-                reply_chain = await fetch_reply_chain(message)
-                chat_history = [ChatMessage(content=msg.content, role=msg.role, user_name=msg.user_name) for msg in reply_chain]
-                channel_prompts = {
-                    'bug-reports': (
-                        "Assist with bug reports. Request: issue details, Route ID, installed branch name, software update status, car details. "
-                        "Compile a report for the user to edit and post in #bug-reports. Remind them to backup their settings. "
-                        "Remember, comma connect routes must be accessed from the `https://connect.comma.ai` website. "
-                        "Routes are stored on the front page of connect."
-                    ),
-                    'default': (
-                        "Provide accurate responses using server and channel names. "
-                        "Give context and related information. Use available tools. "
-                        "Maintain respectfulness. If an unknown acronym is encountered, use Discord_Tool to find its meaning and then perform another search with the newly found information. "
-                        "Provide source links. Use multiple tools for comprehensive responses."
-                    )
-                }
-                system_prompt = (
-                    f"You are '{client.user}', assisting '{message.author}' in the '{message.channel}' of the '{message.guild}' server. "
-                    "Keep all information relevant to this server and context. Provide accurate support as an OpenPilot community assistant. "
-                    "Respond appropriately to the conversation context. Avoid giving code interaction instructions unless specifically asked. "
-                    "Examine code for answers when necessary. Use the provided tools to give comprehensive responses and maintain respectfulness throughout the interaction."
+    if not content:
+        return
+    try:
+        async with message.channel.typing():
+            reply_chain = await fetch_reply_chain(message)
+            chat_history = [ChatMessage(content=msg.content, role=msg.role, user_name=msg.user_name) for msg in reply_chain]
+            channel_prompts = {
+                'bug-reports': (
+                    "Assist with bug reports. Request: issue details, Route ID, installed branch name, software update status, car details. "
+                    "Compile a report for the user to edit and post in #bug-reports. Remind them to backup their settings. "
+                    "Remember, comma connect routes must be accessed from the `https://connect.comma.ai` website. "
+                    "Routes are stored on the front page of connect."
+                ),
+                'default': (
+                    "Provide accurate responses using server and channel names. "
+                    "Give context and related information. Use available tools. "
+                    "Maintain respectfulness. If an unknown acronym is encountered, use Discord_Tool to find its meaning and then perform another search with the newly found information. "
+                    "Provide source links. Use multiple tools for comprehensive responses."
                 )
-                if hasattr(message.channel, 'parent_id') and message.channel.parent_id == 1162100167110053888:
-                    system_prompt += channel_prompts['bug-reports']
-                else:
-                    system_prompt += channel_prompts['default']
-                chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, max_iterations=20, chat_history=chat_history)
-                chat_history.append(ChatMessage(content=content, role="user"))
-                chat_response = await asyncio.to_thread(chat_engine.chat, content)
-                if not chat_response or not chat_response.response:
-                    await message.channel.send("There was an error processing the message." if not chat_response else "I didn't get a response.")
-                    return
-                chat_history.append(ChatMessage(content=chat_response.response, role="assistant"))
-                response_text = [chat_response.response]
-                if not reply_chain:
-                    response_text.append(f"\n*Reply directly to {client.user.mention}'s messages to maintain conversation context.*")
-                await send_long_message(message, '\n'.join(response_text))
-        except Exception as e:
-            await message.channel.send(f"An error occurred: {str(e)}")
+            }
+            system_prompt = (
+                f"You are '{client.user}', assisting '{message.author}' in the '{message.channel}' of the '{message.guild}' server. "
+                "Keep all information relevant to this server and context. Provide accurate support as an OpenPilot community assistant. "
+                "Respond appropriately to the conversation context. Avoid giving code interaction instructions unless specifically asked. "
+                "Examine code for answers when necessary. Use the provided tools to give comprehensive responses and maintain respectfulness throughout the interaction."
+            )
+            if getattr(message.channel, 'parent_id', None) == 1162100167110053888:
+                system_prompt += channel_prompts['bug-reports']
+            else:
+                system_prompt += channel_prompts['default']
+            chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, chat_history=chat_history)
+            chat_history.append(ChatMessage(content=content, role="user"))
+            chat_response = await asyncio.to_thread(chat_engine.chat, content)
+            if not chat_response or not chat_response.response:
+                error_message = "There was an error processing the message." if not chat_response else "I didn't get a response."
+                await message.channel.send(error_message)
+                return
+            chat_history.append(ChatMessage(content=chat_response.response, role="assistant"))
+            response_text = [chat_response.response]
+            if not reply_chain:
+                response_text.append(f"\n*Reply directly to {client.user.mention}'s messages to maintain conversation context.*")
+            await send_long_message(message, '\n'.join(response_text))     
+    except Exception as e:
+        await message.channel.send(f"An error occurred: {str(e)}")
 
 class OpenPilotAssistant(commands.Cog):
     def __init__(self, client):
@@ -212,6 +152,7 @@ class OpenPilotAssistant(commands.Cog):
     async def on_message(self, message):
         if message.author == self.client.user or message.author.bot:
             return
+        
         if self.client.user in message.mentions:
             await process_message_with_llm(message, self.client)
         else:

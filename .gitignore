@@ -34,7 +34,6 @@ local_nodes/
 DiscordDocs/
 docstore/
 qdrant_db/
-db_files/
 .fleet/settings.json
 DiscordDocs_old/
 FrogWiki/FrogPilot+Wiki-20240712163957.xml
