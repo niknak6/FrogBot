@@ -4,9 +4,10 @@ from llama_index.core import VectorStoreIndex, Settings, StorageContext, SimpleD
 from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
-from llama_index.readers.file import PandasCSVReader
-from sqlalchemy import create_engine, MetaData, make_url, text
 from sqlalchemy.orm import sessionmaker, scoped_session
+from llama_index.readers.file import PandasCSVReader
+from sqlalchemy import create_engine, make_url, text
+from llama_index.readers.web import WholeSiteReader
 from dotenv import load_dotenv
 from tqdm import tqdm
 import psycopg2
@@ -18,11 +19,10 @@ load_dotenv()
 github_client = GithubClient(os.getenv('GITHUB_TOKEN'))
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
 
-# Postgres connection details
+'''POSTGRES DATABASE CREATION'''
 connection_string = os.getenv('POSTGRES_CONNECTION_STRING')
 db_name = "bot_connect"
 
-# Ensure database exists
 conn = psycopg2.connect(connection_string)
 conn.autocommit = True
 with conn.cursor() as c:
@@ -33,7 +33,7 @@ with conn.cursor() as c:
 url = make_url(connection_string)
 embed_dim = 384
 
-# SQLAlchemy engine and session setup
+'''SQLAlchemy engine and session setup'''
 def get_engine(connection_string):
     return create_engine(connection_string, pool_size=10, max_overflow=20)
 
@@ -43,16 +43,15 @@ def get_session(engine):
 
 engine = get_engine(connection_string)
 
-# Ensure schemas exist
 def ensure_schema_exists(conn, schema_name):
     with conn.cursor() as c:
-        c.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"')
+        c.execute(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE')
+        c.execute(f'CREATE SCHEMA "{schema_name}"')
 
 schemas = ["schema_wiki", "schema_commit"]
 for schema in schemas:
     ensure_schema_exists(conn, schema)
 
-# Vector store setup function
 def setup_vector_store(engine, schema_name, table_name, docs):
     with engine.connect() as conn:
         conn.execute(text(f'SET search_path TO "{schema_name}"'))
@@ -72,14 +71,14 @@ def setup_vector_store(engine, schema_name, table_name, docs):
         index = VectorStoreIndex.from_documents(docs, storage_context=storage_context, show_progress=True)
     return index
 
-# WIKI DATA
-reader = SimpleDirectoryReader(input_dir="FrogWiki")
-wiki_docs = reader.load_data()
+'''WIKI DATA'''
+scraper = WholeSiteReader(prefix="https://frogpilot.wiki.gg/", max_depth=1)
+wiki_docs = scraper.load_data(base_url="https://frogpilot.wiki.gg/wiki/Special:AllPages")
 print("Wiki data downloaded successfully. Setting up vector store for wiki...")
 wiki_index = setup_vector_store(engine, "schema_wiki", "wiki_docs", wiki_docs)
 print("Wiki index setup complete.")
 
-# COMMIT DATA
+'''COMMIT DATA'''
 parser = PandasCSVReader()
 file_extractor = {".csv": parser}
 reader = SimpleDirectoryReader(input_dir="CommitHistory", file_extractor=file_extractor)
@@ -88,7 +87,7 @@ print("Commit data downloaded successfully. Setting up vector store for commit..
 commit_index = setup_vector_store(engine, "schema_commit", "commit_history", commit_docs)
 print("Commit index setup complete.")
 
-# GITHUB DATA
+'''GITHUB DATA'''
 repos_config = [
     {
         "owner": "twilsonco",
