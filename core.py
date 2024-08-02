@@ -25,12 +25,7 @@ intents.reactions = True
 command_sync_flags = commands.CommandSyncFlags.default()
 command_sync_flags.sync_commands_debug = False
 
-client = commands.Bot(
-    command_prefix='//',
-    intents=intents,
-    command_sync_flags=command_sync_flags,
-    test_guilds=[698205243103641711, 1137853399715549214]
-)
+client = commands.Bot(command_prefix='/', intents=intents, command_sync_flags=command_sync_flags)
 
 def load_module(file_path, name):
     try:
@@ -128,7 +123,7 @@ def get_git_version():
     try:
         branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
-        return f"v2.5 {branch} {commit}"
+        return f"v2.6 {branch} {commit}"
     except subprocess.CalledProcessError:
         return "unknown-version"
 
