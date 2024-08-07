@@ -134,8 +134,7 @@ async def process_message_with_llm(message, client):
             "Keep all information relevant to this server and context. Provide accurate support as an OpenPilot community assistant. "
             "Respond appropriately to the conversation context. Avoid giving code interaction instructions unless specifically asked. "
             "Examine code for answers when necessary. Use the provided tools to give comprehensive responses and maintain respectfulness throughout the interaction."
-        )
-        system_prompt += channel_prompts['bug-reports'] if getattr(message.channel, 'parent_id', None) == 1162100167110053888 else channel_prompts['default']
+        ) + channel_prompts['bug-reports' if getattr(message.channel, 'parent_id', None) == 1162100167110053888 else 'default']
         async with message.channel.typing():
             chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, chat_history=chat_history)
             chat_history.append(ChatMessage(content=content, role="user"))
