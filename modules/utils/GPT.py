@@ -13,8 +13,8 @@ from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
 from dotenv import load_dotenv
 import traceback
-import asyncio
 import disnake
+import asyncio
 import openai
 import os
 
@@ -28,18 +28,28 @@ class HistoryChatMessage:
 async def fetch_reply_chain(message, max_tokens=4096):
     context, tokens_used = [], 0
     remaining_tokens = max_tokens - len(message.content) // 4
-    while message.reference and tokens_used < remaining_tokens:
-        try:
-            message = await message.channel.fetch_message(message.reference.message_id)
-            role = Role.ASSISTANT if message.author.bot else Role.USER
-            message_tokens = len(message.content) // 4
+    if isinstance(message.channel, disnake.Thread):
+        # Fetch all messages in the thread
+        async for msg in message.channel.history(limit=None):
+            role = Role.ASSISTANT if msg.author.bot else Role.USER
+            message_tokens = len(msg.content) // 4
             if tokens_used + message_tokens > remaining_tokens:
-                break  
-            context.append(HistoryChatMessage(f"{message.content}\n", role, message.author.name if not message.author.bot else None))
+                break
+            context.append(HistoryChatMessage(f"{msg.content}\n", role, msg.author.name if not msg.author.bot else None))
             tokens_used += message_tokens
-        except Exception as e:
-            print(f"Error fetching reply chain message: {e}")
-            break
+    else:
+        while message.reference and tokens_used < remaining_tokens:
+            try:
+                message = await message.channel.fetch_message(message.reference.message_id)
+                role = Role.ASSISTANT if message.author.bot else Role.USER
+                message_tokens = len(message.content) // 4
+                if tokens_used + message_tokens > remaining_tokens:
+                    break  
+                context.append(HistoryChatMessage(f"{message.content}\n", role, message.author.name if not message.author.bot else None))
+                tokens_used += message_tokens
+            except Exception as e:
+                print(f"Error fetching reply chain message: {e}")
+                break
     return context[::-1]
 
 load_dotenv()
@@ -103,57 +113,45 @@ async def process_message_with_llm(message, client):
     if not content:
         return
     try:
-        async with message.channel.typing():
-            reply_chain = await fetch_reply_chain(message)
-            chat_history = [ChatMessage(content=msg.content, role=msg.role, user_name=msg.user_name) for msg in reply_chain]
-            channel_prompts = {
-                'bug-reports': (
-                    "Assist with bug reports. Request: issue details, Route ID, installed branch name, software update status, car details. "
-                    "Compile a report for the user to edit and post in #bug-reports. Remind them to backup their settings. "
-                    "Remember, comma connect routes must be accessed from the `https://connect.comma.ai` website. "
-                    "Routes are stored on the front page of connect."
-                ),
-                'default': (
-                    "Provide accurate responses using server and channel names. "
-                    "Give context and related information. Use available tools. "
-                    "Maintain respectfulness. If an unknown acronym is encountered, use Wiki_Tool to find its meaning and then perform another search with the newly found information. "
-                    "Provide source links. Use multiple tools for comprehensive responses."
-                )
-            }
-            system_prompt = (
-                f"You are '{client.user}', assisting '{message.author}' in the '{message.channel}' of the '{message.guild}' server. "
-                "Keep all information relevant to this server and context. Provide accurate support as an OpenPilot community assistant. "
-                "Respond appropriately to the conversation context. Avoid giving code interaction instructions unless specifically asked. "
-                "Examine code for answers when necessary. Use the provided tools to give comprehensive responses and maintain respectfulness throughout the interaction."
+        reply_chain = await fetch_reply_chain(message)
+        chat_history = [ChatMessage(content=msg.content, role=msg.role, user_name=msg.user_name) for msg in reply_chain]
+        channel_prompts = {
+            'bug-reports': (
+                "Assist with bug reports. Request: issue details, Route ID, installed branch name, software update status, car details. "
+                "Compile a report for the user to edit and post in #bug-reports. Remind them to backup their settings. "
+                "Remember, comma connect routes must be accessed from the `https://connect.comma.ai` website. "
+                "Routes are stored on the front page of connect."
+            ),
+            'default': (
+                "Provide accurate responses using server and channel names. "
+                "Give context and related information. Use available tools. "
+                "Maintain respectfulness. If an unknown acronym is encountered, use Wiki_Tool to find its meaning and then perform another search with the newly found information. "
+                "Provide source links. Use multiple tools for comprehensive responses."
             )
-            if getattr(message.channel, 'parent_id', None) == 1162100167110053888:
-                system_prompt += channel_prompts['bug-reports']
-            else:
-                system_prompt += channel_prompts['default']
+        }
+        system_prompt = (
+            f"You are '{client.user}', assisting '{message.author}' in the '{message.channel}' of the '{message.guild}' server. "
+            "Keep all information relevant to this server and context. Provide accurate support as an OpenPilot community assistant. "
+            "Respond appropriately to the conversation context. Avoid giving code interaction instructions unless specifically asked. "
+            "Examine code for answers when necessary. Use the provided tools to give comprehensive responses and maintain respectfulness throughout the interaction."
+        )
+        system_prompt += channel_prompts['bug-reports'] if getattr(message.channel, 'parent_id', None) == 1162100167110053888 else channel_prompts['default']
+        async with message.channel.typing():
             chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, chat_history=chat_history)
             chat_history.append(ChatMessage(content=content, role="user"))
             chat_response = await asyncio.to_thread(chat_engine.chat, content)
-
-            if not chat_response or not chat_response.response:
-                error_message = "There was an error processing the message." if not chat_response else "I didn't get a response."
-                await message.channel.send(error_message)
-                return
-
-            chat_history.append(ChatMessage(content=chat_response.response, role="assistant"))
-            response_text = [chat_response.response]
-
-            if isinstance(message.channel, disnake.Thread):
-                response_channel = message.channel
-                await response_channel.send(f"{message.author.mention} {chat_response.response}")
-            else:
-                response_channel = await message.create_thread(name=f"FrogBot Conversation: {content[:50]}...")
-                await response_channel.send(f"{message.author.mention} {chat_response.response}")
-                if not reply_chain:
-                    response_text.append(f"\n*Continue the conversation in this thread to maintain context.*")
-
-            if len('\n'.join(response_text)) > 2000:
-                await send_long_message(response_channel, '\n'.join(response_text))
-
+        if not chat_response or not chat_response.response:
+            await message.channel.send("There was an error processing the message." if not chat_response else "I didn't get a response.")
+            return
+        chat_history.append(ChatMessage(content=chat_response.response, role="assistant"))
+        response_text = [chat_response.response]
+        if not reply_chain:
+            response_text.append(f"\n*Reply directly to {client.user.mention}'s messages to maintain conversation context.*")
+        if len(reply_chain) > 1 and not isinstance(message.channel, disnake.Thread):
+            thread = await message.channel.create_thread(name=f"{content[:50]}", message=message)
+            await send_long_message(thread, '\n'.join(response_text))
+        else:
+            await send_long_message(message, '\n'.join(response_text))
     except Exception as e:
         await message.channel.send(f"An error occurred: {str(e)}")
 

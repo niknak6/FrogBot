@@ -1,12 +1,16 @@
 # modules.utils.commons
 
 from disnake.ext import commands
+import disnake
 import re
 
 async def send_message(message, content, should_reply):
     try:
         if should_reply:
-            return await message.reply(content)
+            if isinstance(message, disnake.Thread):
+                return await message.send(content)
+            else:
+                return await message.reply(content)
         else:
             return await message.channel.send(content)
     except Exception as e:
@@ -20,6 +24,7 @@ def split_message(response):
     parts = []
     current_part = ''
     code_block_type = None
+
     for word in words:
         if len(current_part) + len(word) + 1 > max_length:
             for char in markdown_chars:
@@ -32,32 +37,36 @@ def split_message(response):
                 code_block_type = current_part[code_block_start + 3:].split('\n', 1)[0]
                 current_part += '```'
                 word = '```' + (code_block_type + '\n' if code_block_type else '') + word
-            parts.append(current_part)
+            parts.append(current_part.strip())
             current_part = ''
         current_part += ' ' + word
-    parts.append(current_part)
+    parts.append(current_part.strip())
     return parts
 
 async def send_long_message(message, response, should_reply=True):
-    chunks = re.split(r'(```.*?```)', response, flags=re.DOTALL)
-    result = ''
-    for chunk in chunks:
-        if chunk.startswith('```'):
-            result += chunk
-        else:
-            chunk = re.sub(r'\((http[s]?://\S+)\)', r'(<\1>)', chunk)
-            chunk = re.sub(r'(?<![\(<`])http[s]?://\S+(?![>\).,`])', r'<\g<0>>', chunk)
-            result += chunk
-    response = result
-    messages = []
-    parts = split_message(response)
-    for part in parts:
-        last_message = await send_message(message, part, should_reply)
-        if last_message is None:
-            break
-        messages.append(last_message)
-        message = last_message
-    return messages
+    try:
+        chunks = re.split(r'(```.*?```)', response, flags=re.DOTALL)
+        result = ''
+        for chunk in chunks:
+            if chunk.startswith('```'):
+                result += chunk
+            else:
+                chunk = re.sub(r'\((http[s]?://\S+)\)', r'(<\1>)', chunk)
+                chunk = re.sub(r'(?<![\(<`])http[s]?://\S+(?![>\).,`])', r'<\g<0>>', chunk)
+                result += chunk
+        response = result
+        messages = []
+        parts = split_message(response)
+        for part in parts:
+            last_message = await send_message(message, part, should_reply)
+            if last_message is None:
+                break
+            messages.append(last_message)
+            message = last_message
+        return messages
+    except Exception as e:
+        print(f"Error in send_long_message: {e}")
+        return None
 
 def is_admin():
     async def predicate(ctx):
