@@ -14,6 +14,7 @@ from disnake.ext import commands
 from dotenv import load_dotenv
 import traceback
 import asyncio
+import disnake
 import openai
 import os
 
