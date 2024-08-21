@@ -1,9 +1,9 @@
 # modules.reactions.welcome
 
+from core import read_config, update_config
 from disnake.ext import commands
 import asyncio
 import random
-import json
 
 class WelcomeCog(commands.Cog):
     def __init__(self, bot):
@@ -13,19 +13,11 @@ class WelcomeCog(commands.Cog):
                          ["https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExYzhsN3Fnd2c1MG1hcmhwMG00czE5ZHZoZmZsa3k4N3hqcWJya2NwdiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/5xtDarIELDLO7lSFQJi/giphy.gif"]
 
     def load_state(self):
-        try:
-            with open('state.json', 'r') as f:
-                state = json.load(f)
-                return state.get('non_successful_spawns', 0)
-        except FileNotFoundError:
-            return 0
+        config = read_config()
+        return config.get('non_successful_spawns', 0)
 
     def save_state(self, non_successful_spawns):
-        try:
-            with open('state.json', 'w') as f:
-                json.dump({'non_successful_spawns': non_successful_spawns}, f)
-        except Exception as e:
-            print(f"Failed to save state: {e}")
+        update_config('non_successful_spawns', non_successful_spawns)
 
     async def send_welcome_message(self, channel, member, gif=None):
         try:

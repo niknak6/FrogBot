@@ -5,14 +5,12 @@ from llama_index.readers.github import GithubClient, GithubRepositoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.duckdb import DuckDBVectorStore
 from llama_index.readers.file import PandasCSVReader
-from dotenv import load_dotenv
+from core import read_config
 from tqdm import tqdm
 import httpx
 import sys
-import os
 
-load_dotenv()
-github_client = GithubClient(os.getenv('GITHUB_TOKEN'))
+github_client = GithubClient(read_config().get('GITHUB_TOKEN'))
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
 
 '''WIKI DATA'''

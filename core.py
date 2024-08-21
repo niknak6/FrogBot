@@ -5,15 +5,29 @@ from modules.utils.commons import is_admin_or_user
 from concurrent.futures import ThreadPoolExecutor
 from modules.roles import check_user_points
 from disnake.ext import commands
-from dotenv import load_dotenv
 from pathlib import Path
 import importlib.util
 import subprocess
 import asyncio
 import disnake
+import yaml
 import sys
 import os
-load_dotenv()
+
+CONFIG_FILE = 'config.yaml'
+
+def read_config():
+    config_path = Path(CONFIG_FILE)
+    return yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+
+def write_config(config):
+    with open(CONFIG_FILE, 'w') as file:
+        yaml.safe_dump(config, file)
+
+def update_config(key, value):
+    config = read_config()
+    config[key] = value
+    write_config(config)
 
 intents = disnake.Intents.default()
 intents.members = True
@@ -29,6 +43,11 @@ client = commands.Bot(command_prefix='/', intents=intents, command_sync_flags=co
 
 def load_module(file_path, name):
     try:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         spec = importlib.util.spec_from_file_location(name, file_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -49,6 +68,22 @@ def load_modules():
                     file_path = os.path.join(root, file)
                     executor.submit(load_module, file_path, f"{Path(root).name}.{file[:-3]}")
 
+async def run_subprocess(*args):
+    proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    stdout, stderr = await proc.communicate()
+    return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+
+async def restart_bot(ctx):
+    try:
+        await ctx.send("Restarting bot, please wait...")
+        update_config('restart_channel_id', str(ctx.channel.id))
+        await asyncio.sleep(3)
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
+        await ctx.bot.close()
+        sys.exit(0)
+    except Exception as e:
+        await ctx.send(f"Error restarting the bot: {e}")
+
 @client.slash_command(description="Restart the bot.")
 @is_admin_or_user()
 async def restart(ctx):
@@ -61,30 +96,29 @@ async def restart(ctx):
 @is_admin_or_user()
 async def update(ctx, branch="beta", restart=False):
     try:
-        current_branch_proc = await asyncio.create_subprocess_exec("git", "rev-parse", "--abbrev-ref", "HEAD", stdout=asyncio.subprocess.PIPE)
-        stdout, _ = await current_branch_proc.communicate()
-        current_branch = stdout.strip().decode()
+        returncode, current_branch, _ = await run_subprocess("git", "rev-parse", "--abbrev-ref", "HEAD")
+        if returncode != 0:
+            await ctx.send("Failed to get current branch.")
+            return
         if current_branch != branch:
-            await asyncio.create_subprocess_exec("git", "checkout", branch)
-
-        stash_proc = await asyncio.create_subprocess_exec("git", "stash", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stash_stdout, stash_stderr = await stash_proc.communicate()
-        if stash_proc.returncode != 0:
-            await ctx.send(f'Stashing changes failed: {stash_stderr.decode()}')
+            returncode, _, stderr = await run_subprocess("git", "checkout", branch)
+            if returncode != 0:
+                await ctx.send(f"Git checkout failed: {stderr}")
+                return
+        returncode, _, stderr = await run_subprocess("git", "stash")
+        if returncode != 0:
+            await ctx.send(f"Stashing changes failed: {stderr}")
             return
-
-        pull_proc = await asyncio.create_subprocess_exec('git', 'pull', 'origin', branch, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        pull_stdout, pull_stderr = await pull_proc.communicate()
-        if pull_proc.returncode != 0:
-            await ctx.send(f'Git pull failed: {pull_stderr.decode()}')
+        returncode, _, stderr = await run_subprocess("git", "pull", "origin", branch)
+        if returncode != 0:
+            await ctx.send(f"Git pull failed: {stderr}")
             return
-
         await ctx.send('Update process completed.')
         if restart:
             await asyncio.sleep(0.5)
             await restart_bot(ctx)
     except Exception as e:
-        await ctx.send(f'Error updating the script: {e}')
+        await ctx.send(f"Error updating the script: {e}")
 
 @client.slash_command(description="Shut down the bot.")
 @is_admin_or_user()
@@ -107,18 +141,6 @@ async def shutdown_listener(inter):
     elif inter.component.custom_id == "shutdown_no":
         await inter.response.send_message("Bot shutdown canceled.", ephemeral=True)
 
-async def restart_bot(ctx):
-    try:
-        await ctx.send("Restarting bot, please wait...")
-        with open('restart_channel_id.txt', 'w') as f:
-            f.write(str(ctx.channel.id))
-        await asyncio.sleep(3)
-        subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
-        await ctx.bot.close()
-        sys.exit(0)
-    except Exception as e:
-        await ctx.send(f"Error restarting the bot: {e}")
-
 def get_git_version():
     try:
         branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
@@ -134,23 +156,21 @@ async def on_ready():
     await client.change_presence(activity=disnake.Game(name=f"/help | {get_git_version()}"))
     print(f'Logged in as {client.user.name}')
     try:
-        with open('restart_channel_id.txt', 'r') as f:
-            restart_channel_id = int(f.read().strip() or 0)
+        config = read_config()
+        restart_channel_id = int(config.get('restart_channel_id', 0))
         if restart_channel_id:
             channel = client.get_channel(restart_channel_id)
             if channel:
                 await channel.send("I'm back online!")
-        with open('restart_channel_id.txt', 'w') as f:
-            f.write('')
+        update_config('restart_channel_id', '')
     except Exception as e:
         print(f"Error sending restart message: {e}")
 
 if __name__ == "__main__":
     load_modules()
-
-try:
-    client.run(os.getenv("DISCORD_TOKEN"))
-except Exception as e:
-    print(f"An error occurred while trying to run the Discord client: {e}")
+    try:
+        client.run(read_config().get('DISCORD_TOKEN'))
+    except Exception as e:
+        print(f"An error occurred while trying to run the Discord client: {e}")
 
 '''Kaofui was here uwu'''

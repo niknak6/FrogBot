@@ -34,7 +34,7 @@ class ThreadCreateCog(commands.Cog):
         async def on_no_button_clicked(self, interaction):
             if interaction.user.id != self.original_poster_id:
                 return
-            await self.message.delete()
+            await self.message.edit(content='*The user has selected "done"*')
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):

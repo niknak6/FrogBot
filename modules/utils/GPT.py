@@ -11,12 +11,11 @@ from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.llms import ChatMessage
 from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
-from dotenv import load_dotenv
+from core import read_config
 import traceback
 import disnake
 import asyncio
 import openai
-import os
 
 class HistoryChatMessage:
     def __init__(self, content, role, user_name=None, additional_kwargs=None):
@@ -29,7 +28,6 @@ async def fetch_reply_chain(message, max_tokens=4096):
     context, tokens_used = [], 0
     remaining_tokens = max_tokens - len(message.content) // 4
     if isinstance(message.channel, disnake.Thread):
-        # Fetch all messages in the thread
         async for msg in message.channel.history(limit=None):
             role = Role.ASSISTANT if msg.author.bot else Role.USER
             message_tokens = len(msg.content) // 4
@@ -52,8 +50,7 @@ async def fetch_reply_chain(message, max_tokens=4096):
                 break
     return context[::-1]
 
-load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')
+openai.api_key = read_config().get('OPENAI_API_KEY')
 Settings.llm = OpenAI(model="gpt-4o-mini", max_tokens=1000)
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
 

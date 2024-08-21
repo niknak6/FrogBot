@@ -10,4 +10,3 @@ llama-index-llms-openai
 llama-index-tools-duckduckgo
 llama-index-vector-stores-duckdb
 openai
-python-dotenv
