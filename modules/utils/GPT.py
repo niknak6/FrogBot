@@ -32,6 +32,7 @@ async def fetch_reply_chain(message, max_tokens=8192):
     tokens_used = 0
     remaining_tokens = max_tokens - count_tokens(message.content)
     processed_message_ids = set()
+
     async def process_message(msg):
         nonlocal tokens_used
         if msg.id in processed_message_ids:
@@ -44,24 +45,27 @@ async def fetch_reply_chain(message, max_tokens=8192):
         context.append(HistoryChatMessage(msg.content, role, msg.author.name))
         tokens_used += message_tokens
         return True
-    if isinstance(message.channel, disnake.Thread):
-        try:
-            top_message = await message.channel.parent.fetch_message(message.channel.id)
-            await process_message(top_message)
-        except Exception as e:
-            print(f"Error fetching top subject message: {e}")
-        async for msg in message.channel.history(limit=None, oldest_first=True):
-            if not await process_message(msg):
-                break
-    else:
-        while message.reference and tokens_used < remaining_tokens:
+    async def process_reply_chain(msg):
+        while msg.reference and tokens_used < remaining_tokens:
             try:
-                message = await message.channel.fetch_message(message.reference.message_id)
-                if not await process_message(message):
+                msg = await msg.channel.fetch_message(msg.reference.message_id)
+                if not await process_message(msg):
                     break
             except Exception as e:
                 print(f"Error fetching reply chain message: {e}")
                 break
+    if isinstance(message.channel, disnake.Thread):
+        try:
+            thread_starter = await message.channel.parent.fetch_message(message.channel.id)
+            await process_message(thread_starter)
+            await process_reply_chain(thread_starter)
+        except Exception as e:
+            print(f"Error fetching thread starter message: {e}")
+        async for msg in message.channel.history(limit=None, oldest_first=True):
+            if not await process_message(msg):
+                break
+    else:
+        await process_reply_chain(message)
     return context[::-1]
 
 openai.api_key = read_config().get('OPENAI_API_KEY')
