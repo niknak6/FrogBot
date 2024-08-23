@@ -32,7 +32,6 @@ async def fetch_reply_chain(message, max_tokens=8192):
     tokens_used = 0
     remaining_tokens = max_tokens - count_tokens(message.content)
     processed_message_ids = set()
-
     async def process_message(msg):
         nonlocal tokens_used
         if msg.id in processed_message_ids:
@@ -137,38 +136,35 @@ async def process_message_with_llm(message, client):
     if not content:
         return
     try:
+        reply_chain = await fetch_reply_chain(message)
+        chat_history = [ChatMessage(content=msg.content, role=msg.role, user_name=msg.user_name) for msg in reply_chain]
+        channel_prompts = {
+            'bug-reports': (
+                "Assist with bug reports by gathering: issue description, Route ID, branch name, update status, and car details. "
+                "Draft a report for user review and post in #bug-reports. Remind users to back up settings. "
+                "Access routes from `https://connect.comma.ai`. Use available tools to find accurate information."
+            ),
+            'default': (
+                "Provide accurate, context-aware responses using server and channel names. "
+                "Include relevant info and use available tools. "
+                "Maintain a respectful tone. Use Wiki_Tool for unknown acronyms and search again. "
+                "Use available tools to find accurate information and avoid making up answers."
+            )
+        }
+        system_prompt = (
+            "Ensure all information is relevant to this server and context. Provide accurate support as an OpenPilot community assistant. "
+            "Respond appropriately to the conversation context. Avoid code interaction instructions unless asked. "
+            "Examine code for answers when necessary. Use provided tools for comprehensive responses and maintain respectfulness. "
+            "Provide source links for all information. Use available tools to find accurate information and avoid making up answers."
+        ) + channel_prompts['bug-reports' if getattr(message.channel, 'parent_id', None) == 1162100167110053888 else 'default']
         async with message.channel.typing():
-            reply_chain = await fetch_reply_chain(message)
-            chat_history = [ChatMessage(content=msg.content, role=msg.role) for msg in reply_chain]
-            memory = ChatMemoryBuffer.from_defaults(chat_history=chat_history, token_limit=8192)
-            channel_prompts = {
-                'bug-reports': (
-                    "Assist with bug reports by gathering: issue description, Route ID, branch name, update status, and car details. "
-                    "Draft a report for user review and post in #bug-reports. Remind users to back up settings. "
-                    "Access routes from `https://connect.comma.ai`. Use available tools to find accurate information."
-                ),
-                'default': (
-                    "Provide accurate, context-aware responses using server and channel names. "
-                    "Include relevant info and use available tools. "
-                    "Maintain a respectful tone. Use Wiki_Tool for unknown acronyms and search again. "
-                    "Use available tools to find accurate information and avoid making up answers."
-                )
-            }
-            system_prompt = (
-                "Ensure all information is relevant to this server and context. Provide accurate support as an OpenPilot community assistant. "
-                "Respond appropriately to the conversation context. Avoid code interaction instructions unless asked. "
-                "Examine code for answers when necessary. Use provided tools for comprehensive responses and maintain respectfulness. "
-                "Provide source links for all information. Use available tools to find accurate information and avoid making up answers."
-            ) + channel_prompts['bug-reports' if getattr(message.channel, 'parent_id', None) == 1162100167110053888 else 'default']
-            user_msg = ChatMessage(role="user", content=content)
-            memory.put(user_msg)
-            chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, memory=memory)
+            chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, chat_history=chat_history)
+            chat_history.append(ChatMessage(content=content, role="user"))
             chat_response = await asyncio.to_thread(chat_engine.chat, content)
         if not chat_response or not chat_response.response:
             await message.channel.send("There was an error processing the message." if not chat_response else "I didn't get a response.")
             return
-        assistant_msg = ChatMessage(content=chat_response.response, role="assistant")
-        memory.put(assistant_msg)
+        chat_history.append(ChatMessage(content=chat_response.response, role="assistant"))
         response_text = [chat_response.response]
         if not reply_chain:
             response_text.append(f"\n*Reply directly to {client.user.mention}'s messages to maintain conversation context.*")
