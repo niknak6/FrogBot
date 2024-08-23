@@ -39,7 +39,7 @@ intents.reactions = True
 command_sync_flags = commands.CommandSyncFlags.default()
 command_sync_flags.sync_commands_debug = False
 
-client = commands.InteractionBot(intents=intents, command_sync_flags=command_sync_flags)
+client = commands.Bot(command_prefix='//||', intents=intents, command_sync_flags=command_sync_flags)
 
 def load_module(file_path, name):
     try:
