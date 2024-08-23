@@ -81,7 +81,7 @@ class EmojiCog(commands.Cog):
         thread = disnake.utils.get(guild.threads, id=thread_id)
         embed = Embed(
             title="Resolution of Request/Report",
-            description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?",
+            description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?\nThis thread will be closed in 25 hours.",
             color=0x3498db
         )
         embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
@@ -97,7 +97,7 @@ class EmojiCog(commands.Cog):
 
         async def send_reminder():
             await asyncio.sleep(43200)
-            await channel.send(f"<@{original_poster_id}>, please select an option.")
+            await channel.send(f"<@{original_poster_id}>, please select an option. If you don't respond within 12 hours from now, the thread will be closed.")
 
         reminder_task = asyncio.create_task(send_reminder())
 
@@ -224,7 +224,6 @@ class EmojiCog(commands.Cog):
             else:
                 await interaction.response.send_message(content="We're sorry, there was an error processing your response.")
         except asyncio.TimeoutError:
-            await channel.send(f"<@{user_id}>, you did not select an option within 24 hours. This thread will now be closed.")
             if thread:
                 await thread.delete()
         finally:
@@ -244,17 +243,21 @@ class EmojiCog(commands.Cog):
     @commands.Cog.listener()
     async def on_button_click(self, interaction: Interaction):
         custom_id = interaction.component.custom_id
-        thread_id = int(custom_id.split("_")[1])
+        if not custom_id.startswith("yes_") and not custom_id.startswith("no_"):
+            return
+        try:
+            thread_id = int(custom_id.split("_")[1])
+        except ValueError:
+            await interaction.response.send_message("Error: Invalid button ID format.", ephemeral=True)
+            return
         interaction_data = db_access_with_retry("SELECT user_id FROM interactions WHERE thread_id = ?", (thread_id,))
         if not interaction_data:
             await interaction.response.send_message("Error: No interaction data found.", ephemeral=True)
             return
         original_poster_id = interaction_data[0][0]
-
         if interaction.user.id != original_poster_id:
             await interaction.response.send_message("Only the thread creator can interact with these buttons.", ephemeral=True)
             return
-
         thread = disnake.utils.get(interaction.guild.threads, id=thread_id)
         if custom_id.startswith("yes_"):
             await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
@@ -263,7 +266,6 @@ class EmojiCog(commands.Cog):
         else:
             await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
             await interaction.message.delete()
-
         db_access_with_retry("DELETE FROM interactions WHERE thread_id = ?", (thread_id,))
 
 def setup(bot):

@@ -1,17 +1,21 @@
 # Configuration file for the bot. This will change and remove all comments after the first run of the bot.
 # ----- RENAME THIS FILE TO config.yaml BEFORE RUNNING THE BOT -----
+
+```REQUIRED```
 # Discord Bot Token
 # Replace with your bot's token from the Discord Developer Portal
 DISCORD_TOKEN: "(REPLACE)"
 
+```OPTIONAL```
 # OpenAI API Key
 # Replace with your OpenAI API key
-OPENAI_API_KEY: "(REPLACE IF USED)"
+# OPENAI_API_KEY: "(REPLACE IF USED)"
 
 # GitHub Token
 # Replace with your GitHub token if needed for GitHub API access
-GITHUB_TOKEN: "(REPLACE IF USED)"
+# GITHUB_TOKEN: "(REPLACE IF USED)"
 
+```DO NOT CHANGE```
 # Restart channel ID
 # This is where your bot will put the last channel ID it was in before restarting
 restart_channel_id: 
