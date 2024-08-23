@@ -14,3 +14,4 @@ gitcommit.py
 user_points.db
 docker-compose.yml
 Dockerfile
+memory_check.py

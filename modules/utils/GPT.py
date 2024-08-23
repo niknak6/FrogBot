@@ -62,9 +62,6 @@ async def fetch_reply_chain(message, max_tokens=8192):
             except Exception as e:
                 print(f"Error fetching reply chain message: {e}")
                 break
-    print("------ Reply Chain ------")
-    for msg in context:
-        print(f"{msg.user_name}: {msg.content} (Tokens: {count_tokens(msg.content)})")
     return context[::-1]
 
 openai.api_key = read_config().get('OPENAI_API_KEY')
