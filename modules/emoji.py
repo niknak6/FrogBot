@@ -81,7 +81,7 @@ class EmojiCog(commands.Cog):
         thread = disnake.utils.get(guild.threads, id=thread_id)
         embed = Embed(
             title="Resolution of Request/Report",
-            description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?\nThis thread will be closed in 25 hours.",
+            description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?\nThis thread will be closed in 24 hours.",
             color=0x3498db
         )
         embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
