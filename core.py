@@ -73,8 +73,10 @@ async def run_subprocess(*args):
     stdout, stderr = await proc.communicate()
     return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
 
-async def restart_bot(ctx):
+async def restart_bot(ctx, message_id, channel_id):
     try:
+        update_config('restart_message_id', str(message_id))
+        update_config('restart_channel_id', str(channel_id))
         await asyncio.sleep(3)
         subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
         await ctx.bot.close()
@@ -88,9 +90,7 @@ async def restart(ctx):
     try:
         await ctx.response.defer()
         message = await ctx.original_response()
-        update_config('restart_message_id', str(message.id))
-        update_config('restart_channel_id', str(ctx.channel.id))
-        await restart_bot(ctx)
+        await restart_bot(ctx, message.id, ctx.channel.id)
     except Exception as e:
         await ctx.edit_original_response(content=f"An error occurred while trying to restart the bot: {e}")
 
@@ -119,7 +119,8 @@ async def update(ctx, branch="beta", restart=False):
         await ctx.edit_original_response(content='Update process completed.')
         if restart:
             await asyncio.sleep(0.5)
-            await restart_bot(ctx)
+            message = await ctx.original_response()
+            await restart_bot(ctx, message.id, ctx.channel.id)
     except Exception as e:
         await ctx.edit_original_response(content=f"Error updating the script: {e}")
 
