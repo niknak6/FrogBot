@@ -123,7 +123,10 @@ class EmojiCog(commands.Cog):
         if emoji_name in self.emoji_points:
             await self.process_emoji_reaction(payload)
         elif emoji_name in self.emoji_actions:
-            await self.emoji_actions[emoji_name](payload)
+            channel = self.bot.get_channel(payload.channel_id)
+            message = await channel.fetch_message(payload.message_id)
+            original_poster_id = message.author.id
+            await self.emoji_actions[emoji_name](payload, original_poster_id)
 
     def get_user_points(self, user_id):
         user_points = db_access_with_retry('SELECT points FROM user_points WHERE user_id = ?', (user_id,))
