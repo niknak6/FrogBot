@@ -217,8 +217,8 @@ class EmojiCog(commands.Cog):
             new_points = current_points - points_to_remove
             if await update_points(member.id, new_points):
                 await check_user_points(self.bot)
-            if message.id in bot_replies:
-                bot_reply_info = bot_replies[message.id]
+            if message.id in self.bot_replies:
+                bot_reply_info = self.bot_replies[message.id]
                 bot_reply_info['total_points'] = new_points
                 bot_reply_info['reasons'].remove(self.emoji_responses[emoji_name])
                 embed = self.create_points_embed(message.author, new_points, bot_reply_info['reasons'], emoji_name)
@@ -227,7 +227,7 @@ class EmojiCog(commands.Cog):
                     await bot_reply_message.edit(embed=embed)
                 except disnake.NotFound:
                     pass
-                bot_replies[message.id] = bot_reply_info
+                self.bot_replies[message.id] = bot_reply_info
             print(f"Removed {points_to_remove} points from {member.display_name} for removing the reaction {emoji_name}")
 
 def setup(bot):
