@@ -94,20 +94,20 @@ class EmojiCog(commands.Cog):
             "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
             (message.id, original_poster_id, thread_id, satisfaction_message.id, payload.channel_id)
         )
-
         async def send_reminder():
             await asyncio.sleep(43200)
             await channel.send(f"<@{original_poster_id}>, please select an option. If you don't respond within 12 hours from now, the thread will be closed.")
-
         reminder_task = asyncio.create_task(send_reminder())
-
         try:
             interaction = await self.bot.wait_for("interaction", timeout=86400, check=lambda i: i.user.id == original_poster_id)
+            if interaction.is_expired():
+                return
             if interaction.component.label == "Yes":
                 if thread:
                     await thread.delete()
             else:
-                await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
                 await interaction.message.delete()
         except asyncio.TimeoutError:
             await channel.send(f"<@{original_poster_id}>, you did not select an option within 24 hours. This thread will now be closed.")
@@ -270,13 +270,17 @@ class EmojiCog(commands.Cog):
         if interaction.user.id != original_poster_id:
             await interaction.response.send_message("Only the thread creator can interact with these buttons.", ephemeral=True)
             return
+        if interaction.is_expired():
+            return
         thread = disnake.utils.get(interaction.guild.threads, id=thread_id)
         if custom_id.startswith("yes_"):
-            await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
             if thread:
                 await thread.delete()
         else:
-            await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
             await interaction.message.delete()
         db_access_with_retry("DELETE FROM interactions WHERE thread_id = ?", (thread_id,))
 
