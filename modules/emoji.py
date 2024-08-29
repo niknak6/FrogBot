@@ -1,7 +1,7 @@
 # modules.emoji
 
 from modules.utils.database import db_access_with_retry, update_points
-from disnake import Button, ButtonStyle, Embed
+from disnake import Button, ButtonStyle, Embed, Interaction
 from modules.roles import check_user_points
 from disnake.ext import commands
 import datetime
@@ -63,10 +63,20 @@ class EmojiCog(commands.Cog):
                 disnake.ui.Button(style=ButtonStyle.red, label="No", custom_id=f"no_{thread.id}")
             )
             satisfaction_message = await channel.send(embed=embed, components=[action_row])
-            db_access_with_retry(
-                "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
-                (message.id, original_poster_id, thread.id, satisfaction_message.id, payload.channel_id)
+            existing_entry = db_access_with_retry(
+                "SELECT 1 FROM interactions WHERE message_id = ?", 
+                (message.id,)
             )
+            if not existing_entry:
+                db_access_with_retry(
+                    "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
+                    (message.id, original_poster_id, thread.id, satisfaction_message.id, payload.channel_id)
+                )
+            else:
+                db_access_with_retry(
+                    "UPDATE interactions SET user_id = ?, thread_id = ?, satisfaction_message_id = ?, channel_id = ? WHERE message_id = ?",
+                    (original_poster_id, thread.id, satisfaction_message.id, payload.channel_id, message.id)
+                )
             await self.schedule_reminder(channel, original_poster_id)
             try:
                 interaction = await self.bot.wait_for(
@@ -83,10 +93,13 @@ class EmojiCog(commands.Cog):
 
     async def process_interaction(self, interaction, thread):
         if interaction.component.label == "Yes" and thread:
+            await interaction.response.send_message(content="Thank you! The thread will now be closed.", ephemeral=True)
             await thread.delete()
-        else:
-            await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+        elif interaction.component.label == "No":
+            await interaction.response.send_message(content="We appreciate your feedback. The thread will remain open.", ephemeral=True)
             await interaction.message.delete()
+        else:
+            await interaction.response.send_message(content="Invalid response. Please try again.", ephemeral=True)
 
     async def close_thread(self, channel, thread, user_id):
         await channel.send(f"<@{user_id}>, you did not select an option within 24 hours. This thread will now be closed.")
