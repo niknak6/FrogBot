@@ -35,7 +35,7 @@ class TadpoleLoungeCog(commands.Cog):
 
             role = disnake.utils.get(member.guild.roles, name="tadpole")
             channel = member.guild.get_channel(1208256502645657611)
-            utcnow_aware = datetime.now(datetime.UTC).replace(tzinfo=timezone.utc)
+            utcnow_aware = datetime.now(timezone.utc)
             if utcnow_aware - member.created_at < timedelta(days=2):
                 await self.add_role(member, role, channel)
             else:
