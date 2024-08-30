@@ -96,8 +96,7 @@ async def restart(ctx):
 
 @client.slash_command(description="Update the bot from the Git repository.")
 @is_admin_or_user()
-async def update(ctx, branch: str = "beta", *args):
-    restart = "restart" in args
+async def update(ctx, branch: str = "beta", restart: bool = False):
     async def run_git_command(*cmd):
         return await run_subprocess("git", *cmd)
     try:
@@ -128,11 +127,7 @@ async def shutdown(ctx):
         disnake.ui.Button(label="Yes", style=disnake.ButtonStyle.success, custom_id="shutdown_yes"),
         disnake.ui.Button(label="No", style=disnake.ButtonStyle.danger, custom_id="shutdown_no"),
     ]
-    await ctx.response.send_message(
-        "Are you sure you want to shut down the bot?",
-        components=buttons,
-        ephemeral=True
-    )
+    await ctx.response.send_message("Are you sure you want to shut down the bot?", components=buttons, ephemeral=True)
 
 @client.listen("on_button_click")
 @is_admin_or_user()
