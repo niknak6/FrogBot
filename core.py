@@ -96,7 +96,7 @@ async def restart(ctx):
 
 @client.slash_command(description="Update the bot from the Git repository.")
 @is_admin_or_user()
-async def update(ctx, branch="beta", restart=False):
+async def update(ctx, branch="beta", restart: bool = False):
     try:
         await ctx.response.defer()
         returncode, current_branch, _ = await run_subprocess("git", "rev-parse", "--abbrev-ref", "HEAD")
