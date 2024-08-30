@@ -96,8 +96,7 @@ async def restart(ctx):
 
 @client.slash_command(description="Update the bot from the Git repository.")
 @is_admin_or_user()
-async def update(ctx, *args):
-    branch = "beta"
+async def update(ctx, branch: str = "beta", *args):
     restart = "restart" in args
     async def run_git_command(*cmd):
         return await run_subprocess("git", *cmd)
