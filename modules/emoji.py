@@ -68,6 +68,9 @@ class EmojiCog(commands.Cog):
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         thread = message.thread
+        if not thread:
+            print(f"Error: No thread found for message {message.id}")
+            return
         embed = Embed(
             title="Resolution of Request/Report",
             description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?\nThis thread will be closed in 24 hours.",
@@ -78,32 +81,37 @@ class EmojiCog(commands.Cog):
             disnake.ui.Button(style=ButtonStyle.green, label="Yes", custom_id=f"yes_{thread.id}"),
             disnake.ui.Button(style=ButtonStyle.red, label="No", custom_id=f"no_{thread.id}")
         )
-        satisfaction_message = await channel.send(embed=embed, components=[action_row])
-        db_access_with_retry(
-            "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
-            (message.id, original_poster_id, thread.id, satisfaction_message.id, payload.channel_id)
-        )
-        await self.wait_for_user_response(channel, original_poster_id, thread, satisfaction_message)
+        try:
+            satisfaction_message = await thread.send(embed=embed, components=[action_row])
+            db_access_with_retry(
+                "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
+                (message.id, original_poster_id, thread.id, satisfaction_message.id, payload.channel_id)
+            )
+            await self.wait_for_user_response(thread, original_poster_id, thread, satisfaction_message)
+        except Exception as e:
+            print(f"Error in handle_checkmark_reaction: {e}")
 
     async def wait_for_user_response(self, channel: disnake.TextChannel, user_id: int, thread: disnake.Thread, satisfaction_message: disnake.Message) -> None:
         async def send_reminder():
             await asyncio.sleep(43200)  # 12 hours
-            await channel.send(f"<@{user_id}>, please select an option. If you don't respond within 12 hours from now, the thread will be closed.")
+            await thread.send(f"<@{user_id}>, please select an option. If you don't respond within 12 hours from now, the thread will be closed.")
         reminder_task = asyncio.create_task(send_reminder())
         try:
             interaction = await self.bot.wait_for(
-                "interaction",
+                "button_click",
                 timeout=86400,  # 24 hours
-                check=lambda i: i.user.id == user_id and i.message.id == satisfaction_message.id
+                check=lambda i: i.message.id == satisfaction_message.id and i.user.id == user_id
             )
-            if interaction.component.label == "Yes":
+            if interaction.component.custom_id.startswith("yes"):
                 await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+                await asyncio.sleep(5)  # Give some time for the message to be sent before deleting the thread
                 await thread.delete()
             else:
                 await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
-                await interaction.message.delete()
+                await satisfaction_message.delete()
         except asyncio.TimeoutError:
-            await channel.send(f"<@{user_id}>, you did not select an option within 24 hours. This thread will now be closed.")
+            await thread.send(f"<@{user_id}>, you did not select an option within 24 hours. This thread will now be closed.")
+            await asyncio.sleep(5)  # Give some time for the message to be sent before deleting the thread
             await thread.delete()
         finally:
             with suppress(asyncio.CancelledError):
