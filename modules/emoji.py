@@ -53,21 +53,25 @@ class EmojiCog(commands.Cog):
         await self.handle_reaction(payload, "Thumbs down", "We're sorry to hear that. We'll strive to do better.")
 
     async def process_close(self, payload: disnake.RawReactionActionEvent) -> None:
-        if payload.user_id == self.bot.user.id or payload.guild_id is None:
-            return
-        emoji_name = str(payload.emoji)
-        if emoji_name not in EMOJI_ACTIONS:
-            return
+        print(f"process_close called with payload: {payload}")
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        if emoji_name == "✅" and isinstance(channel, disnake.TextChannel) and channel.type == disnake.ChannelType.forum:
+        print(f"Channel type: {channel.type}, Message author ID: {message.author.id}")
+        if isinstance(channel, disnake.Thread):
+            print(f"Checkmark in thread. Reactor ID: {payload.user_id}")
             if payload.member.guild_permissions.administrator or payload.user_id == 126123710435295232:
+                print("User has permission to close. Calling handle_checkmark_reaction")
                 await self.handle_checkmark_reaction(payload, message.author.id)
+            else:
+                print("User does not have permission to close")
+        else:
+            print(f"Not a thread. Channel type: {channel.type}")
 
     async def handle_checkmark_reaction(self, payload: disnake.RawReactionActionEvent, original_poster_id: int) -> None:
+        print(f"handle_checkmark_reaction called. Payload: {payload}, Original poster ID: {original_poster_id}")
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        thread = message.thread
+        thread = channel if isinstance(channel, disnake.Thread) else message.thread
         if not thread:
             print(f"Error: No thread found for message {message.id}")
             return
@@ -83,10 +87,12 @@ class EmojiCog(commands.Cog):
         )
         try:
             satisfaction_message = await thread.send(embed=embed, components=[action_row])
+            print(f"Satisfaction message sent: {satisfaction_message.id}")
             db_access_with_retry(
                 "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
                 (message.id, original_poster_id, thread.id, satisfaction_message.id, payload.channel_id)
             )
+            print("Interaction data inserted into database")
             await self.wait_for_user_response(thread, original_poster_id, thread, satisfaction_message)
         except Exception as e:
             print(f"Error in handle_checkmark_reaction: {e}")
@@ -137,10 +143,12 @@ class EmojiCog(commands.Cog):
         if payload.guild_id is None:
             return
         emoji_name = str(payload.emoji)
+        print(f"Processing reaction: {emoji_name}, is_add: {is_add}")
         if emoji_name in EMOJI_POINTS:
             await self.process_emoji_reaction(payload, is_add)
         elif emoji_name in EMOJI_ACTIONS and is_add:
             if emoji_name == "✅":
+                print("Checkmark detected, calling process_close")
                 await self.process_close(payload)
             else:
                 function_name = EMOJI_ACTIONS[emoji_name]
@@ -216,6 +224,7 @@ class EmojiCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: disnake.RawReactionActionEvent) -> None:
+        print(f"Raw reaction add event received: {payload}")
         await self.process_reaction(payload, is_add=True)
 
     @commands.Cog.listener()

@@ -70,8 +70,8 @@ async def fetch_reply_chain(message, max_tokens=8192):
     except Exception as e:
         print(f"Exception occurred: {e}")
     context_reversed = context[::-1]
-    for msg in context_reversed:
-        print(f"User: {msg.user_name}, Role: {msg.role}, Content: {msg.content}")
+    # for msg in context_reversed:
+    #     print(f"User: {msg.user_name}, Role: {msg.role}, Content: {msg.content}")
     return context_reversed
 
 openai.api_key = read_config().get('OPENAI_API_KEY')
