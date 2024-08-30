@@ -96,26 +96,24 @@ async def restart(ctx):
 
 @client.slash_command(description="Update the bot from the Git repository.")
 @is_admin_or_user()
-async def update(ctx, branch="beta", restart: bool = False):
+async def update(ctx, *args):
+    branch = "beta"
+    restart = "restart" in args
+    async def run_git_command(*cmd):
+        return await run_subprocess("git", *cmd)
     try:
         await ctx.response.defer()
-        returncode, current_branch, _ = await run_subprocess("git", "rev-parse", "--abbrev-ref", "HEAD")
+        returncode, current_branch, _ = await run_git_command("rev-parse", "--abbrev-ref", "HEAD")
         if returncode != 0:
-            await ctx.edit_original_response(content="Failed to get current branch.")
-            return
+            raise Exception("Failed to get current branch.")
         if current_branch != branch:
-            returncode, _, stderr = await run_subprocess("git", "checkout", branch)
+            returncode, _, stderr = await run_git_command("checkout", branch)
             if returncode != 0:
-                await ctx.edit_original_response(content=f"Git checkout failed: {stderr}")
-                return
-        returncode, _, stderr = await run_subprocess("git", "stash")
-        if returncode != 0:
-            await ctx.edit_original_response(content=f"Stashing changes failed: {stderr}")
-            return
-        returncode, _, stderr = await run_subprocess("git", "pull", "origin", branch)
-        if returncode != 0:
-            await ctx.edit_original_response(content=f"Git pull failed: {stderr}")
-            return
+                raise Exception(f"Git checkout failed: {stderr}")
+        for cmd in [("stash",), ("pull", "origin", branch)]:
+            returncode, _, stderr = await run_git_command(*cmd)
+            if returncode != 0:
+                raise Exception(f"Git {cmd[0]} failed: {stderr}")
         await ctx.edit_original_response(content='Update process completed.')
         if restart:
             await asyncio.sleep(0.5)
