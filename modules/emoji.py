@@ -99,25 +99,31 @@ class EmojiCog(commands.Cog):
 
     async def wait_for_user_response(self, channel: disnake.TextChannel, user_id: int, thread: disnake.Thread, satisfaction_message: disnake.Message) -> None:
         async def send_reminder():
-            await asyncio.sleep(43200)  # 12 hours
+            await asyncio.sleep(43200)
             await thread.send(f"<@{user_id}>, please select an option. If you don't respond within 12 hours from now, the thread will be closed.")
         reminder_task = asyncio.create_task(send_reminder())
         try:
             interaction = await self.bot.wait_for(
                 "button_click",
-                timeout=86400,  # 24 hours
+                timeout=86400,
                 check=lambda i: i.message.id == satisfaction_message.id and i.user.id == user_id
             )
             if interaction.component.custom_id.startswith("yes"):
-                await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
-                await asyncio.sleep(5)  # Give some time for the message to be sent before deleting the thread
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+                else:
+                    await interaction.followup.send(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+                await asyncio.sleep(5)
                 await thread.delete()
             else:
-                await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+                else:
+                    await interaction.followup.send(content="We're sorry to hear that. We'll strive to do better.")
                 await satisfaction_message.delete()
         except asyncio.TimeoutError:
             await thread.send(f"<@{user_id}>, you did not select an option within 24 hours. This thread will now be closed.")
-            await asyncio.sleep(5)  # Give some time for the message to be sent before deleting the thread
+            await asyncio.sleep(5)
             await thread.delete()
         finally:
             with suppress(asyncio.CancelledError):
