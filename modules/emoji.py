@@ -43,17 +43,13 @@ class EmojiCog(commands.Cog):
     async def handle_reaction(self, payload, reaction_type, reply_message):
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-
         if message.author != self.bot.user:
             return
-
         guild = self.bot.get_guild(payload.guild_id)
         member = guild.get_member(payload.user_id)
         required_rank_id = 1198482895342411846
-
         if not any(role.id >= required_rank_id for role in member.roles):
             return
-
         print(f"{reaction_type} reaction received from user {payload.user_id}")
         await message.reply(reply_message)
 
@@ -94,13 +90,10 @@ class EmojiCog(commands.Cog):
             "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
             (message.id, original_poster_id, thread_id, satisfaction_message.id, payload.channel_id)
         )
-
         async def send_reminder():
             await asyncio.sleep(43200)
             await channel.send(f"<@{original_poster_id}>, please select an option. If you don't respond within 12 hours from now, the thread will be closed.")
-
         reminder_task = asyncio.create_task(send_reminder())
-
         try:
             interaction = await self.bot.wait_for("interaction", timeout=86400, check=lambda i: i.user.id == original_poster_id)
             if interaction.component.label == "Yes":
@@ -117,7 +110,7 @@ class EmojiCog(commands.Cog):
             with suppress(asyncio.CancelledError):
                 reminder_task.cancel()
 
-    async def process_emoji_reaction(self, payload, is_addition=True):
+    async def process_emoji_reaction(self, payload, is_add=True):
         guild = self.bot.get_guild(payload.guild_id)
         reactor = guild.get_member(payload.user_id)
         if not reactor.guild_permissions.administrator:
@@ -126,23 +119,25 @@ class EmojiCog(commands.Cog):
         message = await channel.fetch_message(payload.message_id)
         user_id = message.author.id
         user_points = self.get_user_points(user_id)
-        emoji_name = str(payload.emoji)
-        points_to_add_or_remove = emoji_points[emoji_name]
-        new_points = user_points + points_to_add_or_remove if is_addition else user_points - points_to_add_or_remove
+        points_to_change = emoji_points[str(payload.emoji)]
+        if is_add:
+            new_points = user_points + points_to_change
+        else:
+            new_points = user_points - points_to_change
         if await update_points(user_id, new_points):
             await check_user_points(self.bot)
-        await self.manage_bot_response(payload, points_to_add_or_remove, emoji_name, is_addition)
+        await self.manage_bot_response(payload, points_to_change, str(payload.emoji), is_add)
 
-    async def process_reaction(self, payload, is_addition=True):
+    async def process_reaction(self, payload, is_add=True):
         if payload.guild_id is None:
             return
         emoji_name = str(payload.emoji)
         if emoji_name in emoji_points:
-            await self.process_emoji_reaction(payload, is_addition)
-        elif emoji_name in emoji_actions:
-            if emoji_name == "✅" and is_addition:
+            await self.process_emoji_reaction(payload, is_add)
+        elif emoji_name in emoji_actions and is_add:
+            if emoji_name == "✅":
                 await self.process_close(payload)
-            elif is_addition:
+            else:
                 function_name = emoji_actions[emoji_name]
                 function = getattr(self, function_name)
                 await function(payload)
@@ -151,28 +146,19 @@ class EmojiCog(commands.Cog):
         user_points_dict = db_access_with_retry('SELECT * FROM user_points WHERE user_id = ?', (user_id,))
         return user_points_dict[0][1] if user_points_dict else 0
 
-    async def manage_bot_response(self, payload, points_to_add_or_remove, emoji_name, is_addition=True):
+    async def manage_bot_response(self, payload, points_to_change, emoji_name, is_add):
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         bot_reply_info = bot_replies.get(message.id, {'reply_id': None, 'total_points': 0, 'reasons': []})
-        if is_addition:
+        if is_add:
             if emoji_responses[emoji_name] not in bot_reply_info['reasons']:
                 bot_reply_info['reasons'].append(emoji_responses[emoji_name])
-            bot_reply_info['total_points'] += points_to_add_or_remove
+            total_points = bot_reply_info['total_points'] + points_to_change
         else:
             if emoji_responses[emoji_name] in bot_reply_info['reasons']:
                 bot_reply_info['reasons'].remove(emoji_responses[emoji_name])
-            bot_reply_info['total_points'] -= points_to_add_or_remove
-        if bot_reply_info['total_points'] <= 0:
-            if bot_reply_info['reply_id']:
-                try:
-                    bot_reply_message = await channel.fetch_message(bot_reply_info['reply_id'])
-                    await bot_reply_message.delete()
-                except disnake.NotFound:
-                    pass
-            del bot_replies[message.id]
-            return
-        embed = self.create_points_embed(message.author, bot_reply_info['total_points'], bot_reply_info['reasons'], emoji_name)
+            total_points = bot_reply_info['total_points'] - points_to_change
+        embed = self.create_points_embed(message.author, total_points, bot_reply_info['reasons'], emoji_name)
         if bot_reply_info['reply_id']:
             try:
                 bot_reply_message = await channel.fetch_message(bot_reply_info['reply_id'])
@@ -180,9 +166,13 @@ class EmojiCog(commands.Cog):
             except disnake.NotFound:
                 bot_reply_info['reply_id'] = None
         if not bot_reply_info['reply_id']:
-            bot_reply_message = await message.reply(embed=embed)
-            bot_reply_info['reply_id'] = bot_reply_message.id
-        bot_replies[message.id] = bot_reply_info
+            if message.id in bot_replies:
+                bot_reply_message = await channel.fetch_message(bot_replies[message.id]['reply_id'])
+                await bot_reply_message.edit(embed=embed)
+            else:
+                bot_reply_message = await message.reply(embed=embed)
+                bot_reply_info['reply_id'] = bot_reply_message.id
+        bot_replies[message.id] = {'reply_id': bot_reply_message.id, 'total_points': total_points, 'reasons': bot_reply_info['reasons']}
 
     def create_points_embed(self, user, total_points, reasons, emoji_name):
         title = f"Points Updated: {emoji_name}"
@@ -246,11 +236,11 @@ class EmojiCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
-        await self.process_reaction(payload, is_addition=True)
+        await self.process_reaction(payload, is_add=True)
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload):
-        await self.process_reaction(payload, is_addition=False)
+        await self.process_reaction(payload, is_add=False)
 
     @commands.Cog.listener()
     async def on_button_click(self, interaction: Interaction):
