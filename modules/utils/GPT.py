@@ -92,7 +92,7 @@ def create_site_tool(site):
         )
     )
 
-sites = ["comma.ai", "oneclone.net", "springerelectronics.com", "shop.retropilot.org"]
+sites = ["comma.ai", "oneclone.net", "springerelectronics.com", "shop.retropilot.org", "torqueinterceptor.com"]
 s_tools = {site: create_site_tool(site) for site in sites}
 
 def create_query_engine(collection_name, tool_name, description):
