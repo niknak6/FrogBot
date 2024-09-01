@@ -31,7 +31,7 @@ async def manage_roles(member, appropriate_role, is_upgrade, notification_channe
             await notification_channel.send(f"Congratulations! {member.mention} has been granted the following role: {appropriate_role.name}!")
 
 async def check_user_points(client):
-    user_points_data = db_access_with_retry('SELECT user_id, points FROM user_points')
+    user_points_data = await db_access_with_retry('SELECT user_id, points FROM user_points')
     guild = await get_guild(client)
     if guild is None:
         return

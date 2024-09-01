@@ -1,6 +1,6 @@
 # modules.utils.progression
 
-from modules.utils.database import initialize_points_database
+from modules.utils.database import initialize_points_database, get_user_points
 from bisect import bisect_right
 import datetime
 import disnake
@@ -21,9 +21,9 @@ role_thresholds = {
 sorted_thresholds = sorted(role_thresholds.keys())
 sorted_roles = [role_thresholds[threshold] for threshold in sorted_thresholds]
 
-def calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds):
-    user_points = initialize_points_database(user)
-    current_points = user_points.get(user.id, 0)
+async def calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds):
+    await initialize_points_database(user)
+    current_points = await get_user_points(user.id)
     index = bisect_right(sorted_thresholds, current_points)
     current_threshold = sorted_thresholds[index - 1] if index > 0 else 0
     next_threshold = sorted_thresholds[index] if index < len(sorted_thresholds) else max(role_thresholds.keys())
@@ -31,7 +31,8 @@ def calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds):
     next_rank_role = ctx.guild.get_role(next_role_id) if next_role_id else None
     next_rank_name = next_rank_role.name if next_rank_role else "Next Rank"
     points_needed = next_threshold - current_points if next_role_id else 0
-    sorted_users = sorted(user_points.items(), key=lambda x: x[1], reverse=True)
+    user_points = await get_user_points(user.id)
+    sorted_users = sorted(user_points.items(), key=lambda x: x[1], reverse=True) if isinstance(user_points, dict) else []
     user_rank = next((index for index, (u_id, _) in enumerate(sorted_users) if u_id == user.id), -1)
     return user_rank, next_rank_name, points_needed, current_threshold, next_threshold
 
@@ -43,9 +44,9 @@ def create_progress_bar(current, total, length=10, fill_symbols='█▉▊▋▌
     remainder_fill = progress % len(fill_symbols)
     return (fill_symbols[0] * filled_count) + (fill_symbols[remainder_fill] if remainder_fill > 0 else '') + empty * (length - filled_count - 1)
 
-def create_points_embed(ctx, user, current_points, role_thresholds, action, user_rank, next_rank_name, points_changed, reason=None):
+async def create_points_embed(ctx, user, current_points, role_thresholds, action, user_rank, next_rank_name, points_changed, reason=None):
     title = f"Points Added ⬆️: {points_changed}" if action == "add" else f"Points Removed ⬇️: {points_changed}"
-    user_rank, next_rank_name, points_needed, current_threshold, next_threshold = calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds)
+    user_rank, next_rank_name, points_needed, current_threshold, next_threshold = await calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds)
     progress_length = next_threshold - current_threshold
     progress_current = current_points - current_threshold
     progress_bar = create_progress_bar(progress_current, progress_length)

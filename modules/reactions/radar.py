@@ -11,7 +11,6 @@ class RadarBatCog(commands.Cog):
     async def on_message(self, message):
         if message.author.bot:
             return
-        
         content_lower = message.content.lower()
         if 'radar' in content_lower:
             if random.randint(1, 24) == 1:

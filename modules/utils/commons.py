@@ -24,7 +24,6 @@ def split_message(response):
     parts = []
     current_part = ''
     code_block_type = None
-
     for word in words:
         if len(current_part) + len(word) + 1 > max_length:
             for char in markdown_chars:

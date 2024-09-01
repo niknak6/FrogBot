@@ -36,15 +36,30 @@ class EmojiCog(commands.Cog):
         self.bot = bot
         self.bot_replies: Dict[int, Dict] = {}
 
-    async def handle_reaction(self, payload: disnake.RawReactionActionEvent, reaction_type: str, reply_message: str) -> None:
+    async def process_reaction(self, payload: disnake.RawReactionActionEvent, is_add: bool) -> None:
+        if payload.guild_id is None:
+            return
+        emoji_name = str(payload.emoji)
+        print(f"Processing reaction: {emoji_name}, is_add: {is_add}")
+        if emoji_name in EMOJI_POINTS:
+            await self.process_emoji_reaction(payload, is_add)
+        elif emoji_name in EMOJI_ACTIONS and is_add:
+            await getattr(self, EMOJI_ACTIONS[emoji_name])(payload)
+
+    async def process_emoji_reaction(self, payload: disnake.RawReactionActionEvent, is_add: bool) -> None:
+        guild = self.bot.get_guild(payload.guild_id)
+        reactor = guild.get_member(payload.user_id)
+        if not reactor.guild_permissions.administrator:
+            return
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        if message.author == self.bot.user:
-            guild = self.bot.get_guild(payload.guild_id)
-            member = guild.get_member(payload.user_id)
-            if any(role.id >= REQUIRED_RANK_ID for role in member.roles):
-                print(f"{reaction_type} reaction received from user {payload.user_id}")
-                await message.reply(reply_message)
+        user_id = message.author.id
+        user_points = await self.get_user_points(user_id)
+        points_to_change = EMOJI_POINTS[str(payload.emoji)]
+        new_points = user_points + points_to_change if is_add else user_points - points_to_change
+        if await update_points(user_id, new_points):
+            await check_user_points(self.bot)
+        await self.manage_bot_response(payload, points_to_change, str(payload.emoji), is_add)
 
     async def handle_thumbsup_reaction(self, payload: disnake.RawReactionActionEvent) -> None:
         await self.handle_reaction(payload, "Thumbs up", "Thank you for your positive feedback!")
@@ -52,23 +67,8 @@ class EmojiCog(commands.Cog):
     async def handle_thumbsdown_reaction(self, payload: disnake.RawReactionActionEvent) -> None:
         await self.handle_reaction(payload, "Thumbs down", "We're sorry to hear that. We'll strive to do better.")
 
-    async def process_close(self, payload: disnake.RawReactionActionEvent) -> None:
-        print(f"process_close called with payload: {payload}")
-        channel = self.bot.get_channel(payload.channel_id)
-        message = await channel.fetch_message(payload.message_id)
-        print(f"Channel type: {channel.type}, Message author ID: {message.author.id}")
-        if isinstance(channel, disnake.Thread):
-            print(f"Checkmark in thread. Reactor ID: {payload.user_id}")
-            if payload.member.guild_permissions.administrator or payload.user_id == 126123710435295232:
-                print("User has permission to close. Calling handle_checkmark_reaction")
-                await self.handle_checkmark_reaction(payload, message.author.id)
-            else:
-                print("User does not have permission to close")
-        else:
-            print(f"Not a thread. Channel type: {channel.type}")
-
-    async def handle_checkmark_reaction(self, payload: disnake.RawReactionActionEvent, original_poster_id: int) -> None:
-        print(f"handle_checkmark_reaction called. Payload: {payload}, Original poster ID: {original_poster_id}")
+    async def handle_checkmark_reaction(self, payload: disnake.RawReactionActionEvent) -> None:
+        print(f"handle_checkmark_reaction called. Payload: {payload}")
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         thread = channel if isinstance(channel, disnake.Thread) else message.thread
@@ -77,7 +77,7 @@ class EmojiCog(commands.Cog):
             return
         embed = Embed(
             title="Resolution of Request/Report",
-            description=f"<@{original_poster_id}>, your request or report is considered resolved. Are you satisfied with the resolution?\nThis thread will be closed in 24 hours.",
+            description=f"<@{message.author.id}>, your request or report is considered resolved. Are you satisfied with the resolution?\nThis thread will be closed in 24 hours.",
             color=0x3498db
         )
         embed.set_footer(text="Selecting 'Yes' will close and delete this thread. Selecting 'No' will keep the thread open.")
@@ -90,14 +90,39 @@ class EmojiCog(commands.Cog):
             print(f"Satisfaction message sent: {satisfaction_message.id}")
             db_access_with_retry(
                 "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
-                (message.id, original_poster_id, thread.id, satisfaction_message.id, payload.channel_id)
+                (message.id, message.author.id, thread.id, satisfaction_message.id, payload.channel_id)
             )
             print("Interaction data inserted into database")
-            await self.wait_for_user_response(thread, original_poster_id, thread, satisfaction_message)
+            await self.wait_for_user_response(thread, message.author.id, satisfaction_message)
         except Exception as e:
             print(f"Error in handle_checkmark_reaction: {e}")
 
-    async def wait_for_user_response(self, channel: disnake.TextChannel, user_id: int, thread: disnake.Thread, satisfaction_message: disnake.Message) -> None:
+    async def process_close(self, payload: disnake.RawReactionActionEvent) -> None:
+        print(f"process_close called with payload: {payload}")
+        channel = self.bot.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        print(f"Channel type: {channel.type}, Message author ID: {message.author.id}")
+        if isinstance(channel, disnake.Thread):
+            print(f"Checkmark in thread. Reactor ID: {payload.user_id}")
+            if payload.member.guild_permissions.administrator or payload.user_id == 126123710435295232:
+                print("User has permission to close. Calling handle_checkmark_reaction")
+                await self.handle_checkmark_reaction(payload)
+            else:
+                print("User does not have permission to close")
+        else:
+            print(f"Not a thread. Channel type: {channel.type}")
+
+    async def handle_reaction(self, payload: disnake.RawReactionActionEvent, reaction_type: str, reply_message: str) -> None:
+        channel = self.bot.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        if message.author == self.bot.user:
+            guild = self.bot.get_guild(payload.guild_id)
+            member = guild.get_member(payload.user_id)
+            if any(role.id >= REQUIRED_RANK_ID for role in member.roles):
+                print(f"{reaction_type} reaction received from user {payload.user_id}")
+                await message.reply(reply_message)
+
+    async def wait_for_user_response(self, thread: disnake.Thread, user_id: int, satisfaction_message: disnake.Message) -> None:
         async def send_reminder():
             await asyncio.sleep(43200)
             await thread.send(f"<@{user_id}>, please select an option. If you don't respond within 12 hours from now, the thread will be closed.")
@@ -109,18 +134,14 @@ class EmojiCog(commands.Cog):
                 check=lambda i: i.message.id == satisfaction_message.id and i.user.id == user_id
             )
             if interaction.component.custom_id.startswith("yes"):
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
-                else:
-                    await interaction.followup.send(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+                await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
                 await asyncio.sleep(5)
                 await thread.delete()
             else:
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
-                else:
-                    await interaction.followup.send(content="We're sorry to hear that. We'll strive to do better.")
+                await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
                 await satisfaction_message.delete()
+                with suppress(asyncio.CancelledError):
+                    reminder_task.cancel()
         except asyncio.TimeoutError:
             await thread.send(f"<@{user_id}>, you did not select an option within 24 hours. This thread will now be closed.")
             await asyncio.sleep(5)
@@ -129,41 +150,6 @@ class EmojiCog(commands.Cog):
             with suppress(asyncio.CancelledError):
                 reminder_task.cancel()
             db_access_with_retry("DELETE FROM interactions WHERE thread_id = ?", (thread.id,))
-
-    async def process_emoji_reaction(self, payload: disnake.RawReactionActionEvent, is_add: bool) -> None:
-        guild = self.bot.get_guild(payload.guild_id)
-        reactor = guild.get_member(payload.user_id)
-        if not reactor.guild_permissions.administrator:
-            return
-        channel = self.bot.get_channel(payload.channel_id)
-        message = await channel.fetch_message(payload.message_id)
-        user_id = message.author.id
-        user_points = self.get_user_points(user_id)
-        points_to_change = EMOJI_POINTS[str(payload.emoji)]
-        new_points = user_points + points_to_change if is_add else user_points - points_to_change
-        if await update_points(user_id, new_points):
-            await check_user_points(self.bot)
-        await self.manage_bot_response(payload, points_to_change, str(payload.emoji), is_add)
-
-    async def process_reaction(self, payload: disnake.RawReactionActionEvent, is_add: bool) -> None:
-        if payload.guild_id is None:
-            return
-        emoji_name = str(payload.emoji)
-        print(f"Processing reaction: {emoji_name}, is_add: {is_add}")
-        if emoji_name in EMOJI_POINTS:
-            await self.process_emoji_reaction(payload, is_add)
-        elif emoji_name in EMOJI_ACTIONS and is_add:
-            if emoji_name == "✅":
-                print("Checkmark detected, calling process_close")
-                await self.process_close(payload)
-            else:
-                function_name = EMOJI_ACTIONS[emoji_name]
-                function = getattr(self, function_name)
-                await function(payload)
-
-    def get_user_points(self, user_id: int) -> int:
-        user_points_dict = db_access_with_retry('SELECT * FROM user_points WHERE user_id = ?', (user_id,))
-        return user_points_dict[0][1] if user_points_dict else 0
 
     async def manage_bot_response(self, payload: disnake.RawReactionActionEvent, points_to_change: int, emoji_name: str, is_add: bool) -> None:
         channel = self.bot.get_channel(payload.channel_id)
@@ -205,8 +191,12 @@ class EmojiCog(commands.Cog):
         embed.set_footer(text=f"Updated on {disnake.utils.utcnow().strftime('%Y-%m-%d')} | '/check_points' for more info.")
         return embed
 
+    async def get_user_points(self, user_id: int) -> int:
+        user_points_dict = await db_access_with_retry('SELECT * FROM user_points WHERE user_id = ?', (user_id,))
+        return user_points_dict[0][1] if user_points_dict else 0
+
     async def load_interaction_states(self) -> None:
-        interaction_states = db_access_with_retry("SELECT message_id, user_id, thread_id, satisfaction_message_id, channel_id FROM interactions")
+        interaction_states = await db_access_with_retry("SELECT message_id, user_id, thread_id, satisfaction_message_id, channel_id FROM interactions")
         for state in interaction_states:
             message_id, user_id, thread_id, satisfaction_message_id, channel_id = state
             asyncio.create_task(self.resume_interaction(message_id, user_id, thread_id, satisfaction_message_id, channel_id))
@@ -218,7 +208,7 @@ class EmojiCog(commands.Cog):
         try:
             satisfaction_message = await channel.fetch_message(satisfaction_message_id)
             thread = disnake.utils.get(channel.guild.threads, id=thread_id)
-            await self.wait_for_user_response(channel, user_id, thread, satisfaction_message)
+            await self.wait_for_user_response(thread, user_id, satisfaction_message)
         except Exception as e:
             print(f"Error resuming interaction: {e}")
             db_access_with_retry("DELETE FROM interactions WHERE thread_id = ?", (thread_id,))
@@ -226,11 +216,9 @@ class EmojiCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         await self.load_interaction_states()
-        print('Interaction states are loaded.')
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: disnake.RawReactionActionEvent) -> None:
-        print(f"Raw reaction add event received: {payload}")
         await self.process_reaction(payload, is_add=True)
 
     @commands.Cog.listener()
@@ -263,7 +251,7 @@ class EmojiCog(commands.Cog):
         else:
             await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
             await interaction.message.delete()
-        db_access_with_retry("DELETE FROM interactions WHERE thread_id = ?", (thread_id,))
+            db_access_with_retry("DELETE FROM interactions WHERE thread_id = ?", (thread_id,))
 
 def setup(bot: commands.Bot) -> None:
     bot.add_cog(EmojiCog(bot))

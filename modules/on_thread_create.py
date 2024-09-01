@@ -43,7 +43,6 @@ class ThreadCreateCog(commands.Cog):
         try:
             await asyncio.sleep(1)
             emojis_to_add = EMOJI_MAP.get(thread.parent_id, [])
-
             first_non_bot_message = None
             async for message in thread.history(limit=None):
                 if not message.author.bot:

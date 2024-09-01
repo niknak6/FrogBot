@@ -27,13 +27,13 @@ class PointsCog(commands.Cog):
             print("Invalid points.")
             await ctx.send("Points must be a positive number.")
             return
-        user_points = initialize_points_database(user)
-        current_points = get_user_points(user.id, user_points)
+        await initialize_points_database(user)
+        current_points = await get_user_points(user.id)
         new_points = current_points + points if action == "add" else current_points - points
         if await update_points(user.id, new_points):
             await check_user_points(self.bot)
-        user_rank, next_rank_name, _, _, _ = calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds)
-        new_embed = create_points_embed(ctx, user, new_points, role_thresholds, action, user_rank, next_rank_name, points, reason)
+        user_rank, next_rank_name, _, _, _ = await calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds)
+        new_embed = await create_points_embed(ctx, user, new_points, role_thresholds, action, user_rank, next_rank_name, points, reason)
         await ctx.send(embed=new_embed)
 
 def setup(bot):

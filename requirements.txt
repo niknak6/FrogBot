@@ -8,5 +8,6 @@ llama-index-llms-openai
 llama-index-tools-duckduckgo
 llama-index-vector-stores-elasticsearch
 llama-index-readers-github
+aiosqlite
 openai
 psutil
