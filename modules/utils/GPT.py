@@ -2,7 +2,6 @@
 
 from llama_index.vector_stores.elasticsearch import ElasticsearchStore, AsyncDenseVectorStrategy
 from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
-from llama_index.core.callbacks.token_counting import TokenCountingHandler
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.llms import ChatMessage, MessageRole as Role
 from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
@@ -11,9 +10,9 @@ from modules.utils.commons import send_long_message
 from llama_index.agent.openai import OpenAIAgent
 from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
-from collections import deque
 from core import read_config
 import traceback
+import tiktoken
 import disnake
 import asyncio
 import openai
@@ -26,53 +25,48 @@ class HistoryChatMessage:
         self.user_name = user_name
 
 async def fetch_reply_chain(message, max_tokens=8192):
-    token_counter = TokenCountingHandler()
-    tokens_used = 0
-    remaining_tokens = max_tokens
+    encoding = tiktoken.encoding_for_model("gpt-4")
+    count_tokens = lambda text: len(encoding.encode(text))
     context = []
+    tokens_used = 0
+    remaining_tokens = max_tokens - count_tokens(message.content)
     processed_message_ids = set()
-    async def process_message(msg):
+    async def process_message_chain(msg):
         nonlocal tokens_used
-        if msg.id in processed_message_ids:
-            return False
-        processed_message_ids.add(msg.id)
-        role = Role.ASSISTANT if msg.author.bot else Role.USER
-        token_counter.reset_counts()
-        token_counter.on_event_end(event_type="message", payload={"content": msg.content})
-        message_tokens = token_counter.total_llm_token_count
-        if tokens_used + message_tokens > remaining_tokens:
-            return False
-        context.append(HistoryChatMessage(msg.content, role, msg.author.name))
-        tokens_used += message_tokens
-        return True
-    async def process_reply_chain(msg):
-        queue = deque([msg])
-        while queue:
-            current_msg = queue.pop()
-            if current_msg.id in processed_message_ids:
-                continue
-            if not await process_message(current_msg):
+        messages_to_process = []
+        while msg and tokens_used < remaining_tokens:
+            if msg.id in processed_message_ids:
                 break
-            if current_msg.reference:
+            processed_message_ids.add(msg.id)
+            role = Role.ASSISTANT if msg.author.bot else Role.USER
+            message_tokens = count_tokens(msg.content)
+            if tokens_used + message_tokens > remaining_tokens:
+                break
+            context.append(HistoryChatMessage(msg.content, role, msg.author.name))
+            tokens_used += message_tokens
+            if msg.reference:
                 try:
-                    referenced_msg = await current_msg.channel.fetch_message(current_msg.reference.message_id)
-                    queue.append(referenced_msg)
-                except (disnake.NotFound, Exception):
+                    msg = await msg.channel.fetch_message(msg.reference.message_id)
+                    messages_to_process.append(msg)
+                except Exception as e:
+                    print(f"Error fetching reply chain message: {e}")
                     break
-    try:
-        if isinstance(message.channel, disnake.Thread):
-            async for msg in message.channel.history(limit=None, oldest_first=False):
-                if not await process_message(msg):
-                    break
-        else:
-            await process_reply_chain(message)
-            await process_message(message)
-    except Exception as e:
-        print(f"Exception occurred: {e}")
-    context_reversed = context[::-1]
-    # for msg in context_reversed:
-    #     print(f"User: {msg.user_name}, Role: {msg.role}, Content: {msg.content}")
-    return context_reversed
+            else:
+                break
+        for msg in reversed(messages_to_process):
+            await process_message_chain(msg)
+    if isinstance(message.channel, disnake.Thread):
+        try:
+            thread_starter = await message.channel.parent.fetch_message(message.channel.id)
+            await process_message_chain(thread_starter)
+        except Exception as e:
+            print(f"Error fetching thread starter message: {e}")
+        async for msg in message.channel.history(limit=None, oldest_first=False):
+            if not await process_message_chain(msg):
+                break
+    else:
+        await process_message_chain(message)
+    return context[::-1]
 
 openai.api_key = read_config().get('OPENAI_API_KEY')
 Settings.llm = OpenAI(model='gpt-4o-mini', max_tokens=1000)
