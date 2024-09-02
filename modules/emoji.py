@@ -191,11 +191,14 @@ class EmojiCog(commands.Cog):
 
     async def save_interaction_data(self, message_id, user_id, thread_id, satisfaction_message_id, channel_id):
         print(f"Saving interaction data: message_id={message_id}, user_id={user_id}, thread_id={thread_id}, satisfaction_message_id={satisfaction_message_id}, channel_id={channel_id}")
-        await db_access_with_retry(
-            "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
-            (message_id, user_id, thread_id, satisfaction_message_id, channel_id)
-        )
-        print("Interaction data saved.")
+        try:
+            await db_access_with_retry(
+                "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
+                (message_id, user_id, thread_id, satisfaction_message_id, channel_id)
+            )
+            print("Interaction data saved successfully.")
+        except Exception as e:
+            print(f"Error saving interaction data: {e}")
 
     async def schedule_reminder(self, channel, user_id):
         async def send_reminder():
