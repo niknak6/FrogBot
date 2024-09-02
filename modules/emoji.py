@@ -144,23 +144,32 @@ class EmojiCog(commands.Cog):
         return user_points_dict[0][1] if user_points_dict else 0
 
     async def handle_checkmark_reaction(self, payload):
+        print("handle_checkmark_reaction called")
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         if not message.thread:
+            print("Message is not part of a thread.")
             await channel.send("This message is not part of a thread.")
             return
+        print("Message is part of a thread.")
         thread_id = message.thread.id
         guild = self.bot.get_guild(payload.guild_id)
         thread = disnake.utils.get(guild.threads, id=thread_id)
         original_poster_id = await self.get_original_poster_id(thread_id)
         if not original_poster_id:
+            print("Original poster ID not found.")
             return
+        print(f"Original poster ID: {original_poster_id}")
         embed = self.create_resolution_embed(original_poster_id)
         action_row = self.create_action_row(thread_id)
         satisfaction_message = await channel.send(embed=embed, components=[action_row])
+        print(f"Satisfaction message sent with ID: {satisfaction_message.id}")
         await self.save_interaction_data(message.id, original_poster_id, thread_id, satisfaction_message.id, payload.channel_id)
+        print("Interaction data saved.")
         await self.schedule_reminder(channel, original_poster_id)
+        print("Reminder scheduled.")
         await self.await_user_interaction(channel, original_poster_id, thread)
+        print("Awaiting user interaction.")
 
     def create_resolution_embed(self, user_id):
         embed = Embed(
