@@ -203,6 +203,42 @@ class EmojiCog(commands.Cog):
             if thread:
                 await thread.delete()
 
+    async def process_button_click(self, interaction: Interaction):
+        custom_id = interaction.component.custom_id
+        if not custom_id.startswith(("yes_", "no_")):
+            return
+        thread_id = self.parse_thread_id(custom_id)
+        if thread_id is None:
+            await self.send_interaction_error(interaction, "Invalid button ID format.")
+            return
+        original_poster_id = await self.get_original_poster_id(thread_id)
+        if original_poster_id is None:
+            await self.send_interaction_error(interaction, "No interaction data found.")
+            return
+        if interaction.user.id != original_poster_id:
+            await self.send_interaction_error(interaction, "Only the thread creator can interact with these buttons.")
+            return
+        thread = disnake.utils.get(interaction.guild.threads, id=thread_id)
+        if custom_id.startswith("yes_"):
+            await self.close_thread(interaction, thread)
+        else:
+            await self.keep_thread_open(interaction)
+
+    async def close_thread(self, interaction, thread):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+        else:
+            await interaction.followup.send(content="Excellent! We're pleased to know you're satisfied. This thread will now be closed.")
+        if thread:
+            await thread.delete()
+
+    async def keep_thread_open(self, interaction):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(content="We're sorry to hear that. We'll strive to do better.")
+        else:
+            await interaction.followup.send(content="We're sorry to hear that. We'll strive to do better.")
+        await interaction.message.delete()
+
     async def load_interaction_states(self):
         interaction_states = await db_access_with_retry("SELECT message_id, user_id FROM interactions")
         for message_id, user_id in interaction_states:
