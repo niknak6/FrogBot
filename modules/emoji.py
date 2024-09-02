@@ -155,6 +155,7 @@ class EmojiCog(commands.Cog):
             return
         print("Message is part of a thread.")
         thread_id = message.thread.id
+        print(f"Thread ID: {thread_id}")
         guild = self.bot.get_guild(payload.guild_id)
         thread = disnake.utils.get(guild.threads, id=thread_id)
         original_poster_id = await self.get_original_poster_id(thread_id)
@@ -189,10 +190,12 @@ class EmojiCog(commands.Cog):
         )
 
     async def save_interaction_data(self, message_id, user_id, thread_id, satisfaction_message_id, channel_id):
+        print(f"Saving interaction data: message_id={message_id}, user_id={user_id}, thread_id={thread_id}, satisfaction_message_id={satisfaction_message_id}, channel_id={channel_id}")
         await db_access_with_retry(
             "INSERT INTO interactions (message_id, user_id, thread_id, satisfaction_message_id, channel_id) VALUES (?, ?, ?, ?, ?)",
             (message_id, user_id, thread_id, satisfaction_message_id, channel_id)
         )
+        print("Interaction data saved.")
 
     async def schedule_reminder(self, channel, user_id):
         async def send_reminder():
