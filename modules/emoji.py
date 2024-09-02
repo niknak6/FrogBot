@@ -209,14 +209,14 @@ class EmojiCog(commands.Cog):
             return
         thread_id = self.parse_thread_id(custom_id)
         if thread_id is None:
-            await self.send_interaction_error(interaction, "Invalid button ID format.")
+            await interaction.response.send_message("Invalid button ID format.", ephemeral=True)
             return
         original_poster_id = await self.get_original_poster_id(thread_id)
         if original_poster_id is None:
-            await self.send_interaction_error(interaction, "No interaction data found.")
+            await interaction.response.send_message("No interaction data found.", ephemeral=True)
             return
-        if interaction.user.id != original_poster_id:
-            await self.send_interaction_error(interaction, "Only the thread creator can interact with these buttons.")
+        if not interaction.user.guild_permissions.administrator and interaction.user.id != 126123710435295232:
+            await interaction.response.send_message("You do not have permission to interact with these buttons.", ephemeral=True)
             return
         thread = disnake.utils.get(interaction.guild.threads, id=thread_id)
         if custom_id.startswith("yes_"):
