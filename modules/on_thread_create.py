@@ -51,14 +51,19 @@ class ThreadCreateCog(commands.Cog):
                 await asyncio.gather(*(self.add_reaction(first_non_bot_message, emoji) for emoji in emojis_to_add))
             if thread.parent_id == 1162100167110053888:
                 original_message = await thread.fetch_message(thread.id)
-                message = await original_message.reply(
-                    "Greetings! It seems you're working on a bug report. To help you more effectively, could you please share the following details:\n"
-                    "- Did you check for updates? Your bug may already be fixed!\n"
-                    "- Are you on the “FrogPilot” or “FrogPilot-Staging” branch?\n"
-                    "- Was there an error in the error log? You can find this in the “Software” panel!\n"
-                    "- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in “Fleet Manager” in the “Tools” section!\n"
-                    "If you need help with any of these steps, please let me know by replying to this message!"
+                embed = disnake.Embed(
+                    title="Bug Report Assistance",
+                    description=(
+                        "Greetings! It seems you're working on a bug report. To help you more effectively, could you please share the following details:\n"
+                        "- Did you check for updates? Your bug may already be fixed!\n"
+                        "- Are you on the “FrogPilot” or “FrogPilot-Staging” branch?\n"
+                        "- Was there an error in the error log? You can find this in the “Software” panel!\n"
+                        "- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in “Fleet Manager” in the “Tools” section!\n"
+                    ),
+                    color=disnake.Color.blue()
                 )
+                embed.set_footer(text="If you need help with any of these steps, please let me know by replying to this message!")
+                message = await original_message.reply(embed=embed)
                 view = self.ConfirmationView(message, original_message.author.id)
                 await message.edit(view=view)
         except Exception as e:
