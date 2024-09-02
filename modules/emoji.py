@@ -1,16 +1,18 @@
 # modules.emoji
 
 from modules.utils.database import db_access_with_retry, update_points
+from disnake import Embed, ButtonStyle
+from disnake.ui import View, Button
 from disnake.ext import commands
 from typing import Dict, List
-from disnake import Embed
 import disnake
 
-REQUIRED_RANK_ID = 1198482895342411846
+ADMIN_USER_ID = 126123710435295232
 
 EMOJI_ACTIONS = {
     "👍": "handle_thumbsup_reaction",
-    "👎": "handle_thumbsdown_reaction"
+    "👎": "handle_thumbsdown_reaction",
+    "✅": "handle_checkmark_reaction"
 }
 
 EMOJI_POINTS = {
@@ -60,8 +62,7 @@ class EmojiCog(commands.Cog):
         await self.update_bot_reply(message, new_points, str(payload.emoji), is_add)
 
     async def update_user_points(self, user_id: int, emoji: disnake.PartialEmoji, is_add: bool) -> int:
-        emoji_name = str(emoji)
-        points_to_change = EMOJI_POINTS[emoji_name]
+        points_to_change = EMOJI_POINTS[str(emoji)]
         user_points = await self.get_user_points(user_id)
         new_points = user_points + points_to_change if is_add else user_points - points_to_change
         if await update_points(user_id, new_points):
@@ -73,8 +74,7 @@ class EmojiCog(commands.Cog):
 
     async def update_bot_reply(self, message: disnake.Message, total_points: int, emoji: str, is_add: bool):
         reply_info = self.bot_replies.get(message.id, {'reply_id': None, 'total_points': 0, 'reasons': []})
-        reason = EMOJI_RESPONSES[emoji]
-        reason_tuple = (emoji, reason)
+        reason_tuple = (emoji, EMOJI_RESPONSES[emoji])
         if is_add:
             if reason_tuple not in reply_info['reasons']:
                 reply_info['reasons'].append(reason_tuple)
@@ -99,20 +99,74 @@ class EmojiCog(commands.Cog):
             reply_info['reply_id'] = reply_message.id
         self.bot_replies[message.id] = reply_info
 
-    def create_points_embed(self, user: disnake.User, total_points: int, reasons: List[tuple]) -> Embed:
-        title = "Points Updated"
-        description = f"{user.display_name} was awarded points for:"
-        reasons_text = "\n".join([f"{emoji} for {reason}" for emoji, reason in reasons])
-        embed = disnake.Embed(
-            title=title,
-            description=description,
-            color=disnake.Color.green()
-        )
-        embed.add_field(name="Reasons", value=reasons_text, inline=False)
-        embed.add_field(name="Total Points", value=f"{total_points}", inline=True)
-        embed.set_footer(text=f"Updated on {disnake.utils.utcnow().strftime('%Y-%m-%d')} | '/check_points' for more info.")
-        return embed
-
     async def get_user_points(self, user_id: int) -> int:
         user_points_dict = await db_access_with_retry('SELECT * FROM user_points WHERE user_id = ?', (user_id,))
         return user_points_dict[0][1] if user_points_dict else 0
+
+    def create_points_embed(self, user: disnake.User, total_points: int, reasons: List[tuple]) -> Embed:
+        embed = disnake.Embed(
+            title="Points Update",
+            description=f"{user.display_name} has been awarded points for:",
+            color=disnake.Color.green()
+        )
+        reasons_text = "\n".join([f"{emoji} **{reason}**" for emoji, reason in reasons])
+        embed.add_field(name="Reasons", value=reasons_text, inline=False)
+        embed.add_field(name="Total Points", value=f"{total_points}", inline=True)
+        embed.set_footer(text=f"Updated on {disnake.utils.utcnow().strftime('%Y-%m-%d')} | Use '/check_points' for more info.")
+        return embed
+    
+    async def handle_checkmark_reaction(self, payload: disnake.RawReactionActionEvent):
+        guild = self.bot.get_guild(payload.guild_id)
+        user = guild.get_member(payload.user_id)
+        if user.guild_permissions.administrator or user.id == ADMIN_USER_ID:
+            channel = self.bot.get_channel(payload.channel_id)
+            if isinstance(channel, disnake.Thread):
+                message = await channel.fetch_message(payload.message_id)
+                op_user = message.author
+                embed = disnake.Embed(
+                    title="Resolve Your Issue/Request",
+                    description=f"{op_user.mention}, has your issue or request been resolved?\nPlease click **Yes** if it has been resolved, or **No** if it hasn't.\n",
+                    color=disnake.Color.green()
+                )
+                embed.set_footer(text="Note: Clicking 'Yes' will delete this thread.")
+                view = self.ResolutionView(message)
+                await message.reply(embed=embed, view=view)
+
+    class ResolutionView(View):
+        def __init__(self, message):
+            super().__init__()
+            self.message = message
+            yes_button = Button(style=ButtonStyle.green, label="Yes")
+            no_button = Button(style=ButtonStyle.red, label="No")
+            yes_button.callback = self.on_yes_button_clicked
+            no_button.callback = self.on_no_button_clicked
+            self.add_item(yes_button)
+            self.add_item(no_button)
+    
+        async def on_yes_button_clicked(self, interaction):
+            if interaction.user.id == self.message.author.id:
+                if isinstance(self.message.channel, disnake.Thread):
+                    await self.message.channel.delete()
+                else:
+                    await interaction.response.send_message("This action can only delete threads.", ephemeral=True)
+            else:
+                await interaction.response.send_message("Only the original poster can close this thread.", ephemeral=True)
+    
+        async def on_no_button_clicked(self, interaction):
+            if interaction.user.id == self.message.author.id:
+                await interaction.message.edit(embed=self.create_apology_embed())
+                self.clear_items()
+                await interaction.message.edit(view=self)
+            else:
+                await interaction.response.send_message("Only the original poster can update this thread.", ephemeral=True)
+    
+        def create_apology_embed(self):
+            embed = disnake.Embed(
+                title="Issue Not Resolved",
+                description="We're sorry that your issue/request was not resolved. Please provide more details for further assistance.",
+                color=disnake.Color.red()
+            )
+            return embed
+
+def setup(bot):
+    bot.add_cog(EmojiCog(bot))
