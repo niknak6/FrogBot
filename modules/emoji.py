@@ -6,6 +6,7 @@ from disnake.ui import View, Button
 from disnake.ext import commands
 from typing import Dict, List
 import disnake
+import asyncio
 
 ADMIN_USER_ID = 126123710435295232
 
@@ -122,51 +123,56 @@ class EmojiCog(commands.Cog):
             channel = self.bot.get_channel(payload.channel_id)
             if isinstance(channel, disnake.Thread):
                 message = await channel.fetch_message(payload.message_id)
-                op_user = message.author
                 embed = disnake.Embed(
-                    title="Resolve Your Issue/Request",
-                    description=f"{op_user.mention}, has your issue or request been resolved?\nPlease click **Yes** if it has been resolved, or **No** if it hasn't.\n",
+                    title="Resolve the Issue/Request",
+                    description="@here Has this issue or request been resolved? Anyone can click **No** if it hasn't.\n",
                     color=disnake.Color.green()
                 )
-                embed.set_footer(text="Note: Clicking 'Yes' will delete this thread.")
+                embed.set_footer(text="This thread will close automatically in 24 hours unless 'No' is clicked.")
                 view = self.ResolutionView(message)
                 await message.reply(embed=embed, view=view)
+                await view.start_countdown()
 
     class ResolutionView(View):
+        REMINDER_TIME = 12 * 60 * 60
+    
         def __init__(self, message):
             super().__init__()
             self.message = message
-            yes_button = Button(style=ButtonStyle.green, label="Yes")
+            self.countdown_task = None
             no_button = Button(style=ButtonStyle.red, label="No")
-            yes_button.callback = self.on_yes_button_clicked
             no_button.callback = self.on_no_button_clicked
-            self.add_item(yes_button)
             self.add_item(no_button)
     
-        async def on_yes_button_clicked(self, interaction):
-            if interaction.user.id == self.message.author.id:
-                if isinstance(self.message.channel, disnake.Thread):
-                    await self.message.channel.delete()
-                else:
-                    await interaction.response.send_message("This action can only delete threads.", ephemeral=True)
-            else:
-                await interaction.response.send_message("Only the original poster can close this thread.", ephemeral=True)
+        async def start_countdown(self):
+            self.countdown_task = asyncio.create_task(self.countdown_with_reminder())
+    
+        async def countdown_with_reminder(self):
+            await asyncio.sleep(self.REMINDER_TIME)
+            await self.send_reminder()
+            await asyncio.sleep(self.REMINDER_TIME)
+            if isinstance(self.message.channel, disnake.Thread):
+                await self.message.channel.delete()
+    
+        async def send_reminder(self):
+            reminder_embed = disnake.Embed(
+                title="Reminder",
+                description="This thread will be closed in 12 hours if no further action is taken.",
+                color=disnake.Color.orange()
+            )
+            await self.message.reply(embed=reminder_embed)
     
         async def on_no_button_clicked(self, interaction):
-            if interaction.user.id == self.message.author.id:
-                await interaction.message.edit(embed=self.create_apology_embed())
-                self.clear_items()
-                await interaction.message.edit(view=self)
-            else:
-                await interaction.response.send_message("Only the original poster can update this thread.", ephemeral=True)
+            if self.countdown_task:
+                self.countdown_task.cancel()
+            await interaction.message.edit(embed=self.create_followup_embed(), view=self.clear_items())
     
-        def create_apology_embed(self):
-            embed = disnake.Embed(
-                title="Issue Not Resolved",
+        def create_followup_embed(self):
+            return disnake.Embed(
+                title="Further Assistance Needed",
                 description="We're sorry that your issue/request was not resolved. Please provide more details for further assistance.",
                 color=disnake.Color.red()
             )
-            return embed
 
 def setup(bot):
     bot.add_cog(EmojiCog(bot))

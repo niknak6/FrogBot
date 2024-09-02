@@ -7,23 +7,17 @@ import logging
 DATABASE_FILE = 'user_points.db'
 
 async def initialize_database():
-    async with aiosqlite.connect(DATABASE_FILE) as conn:
-        await conn.execute('''
-            CREATE TABLE IF NOT EXISTS user_points (
-                user_id INTEGER PRIMARY KEY,
-                points INTEGER NOT NULL DEFAULT 0
-            )
-        ''')
-        await conn.execute('''
-            CREATE TABLE IF NOT EXISTS interactions (
-                message_id INTEGER PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                thread_id INTEGER NOT NULL,
-                satisfaction_message_id INTEGER NOT NULL,
-                channel_id INTEGER NOT NULL
-            )
-        ''')
-        await conn.commit()
+    try:
+        async with aiosqlite.connect(DATABASE_FILE) as conn:
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS user_points (
+                    user_id INTEGER PRIMARY KEY,
+                    points INTEGER NOT NULL DEFAULT 0
+                )
+            ''')
+            await conn.commit()
+    except Exception as e:
+        logging.error(f"Error initializing database: {e}")
 
 async def db_access_with_retry(sql_operation, args=(), max_attempts=5, delay=1, timeout=10.0):
     for attempt in range(max_attempts):
