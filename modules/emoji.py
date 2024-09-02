@@ -122,7 +122,9 @@ class EmojiCog(commands.Cog):
             return None
 
     async def get_original_poster_id(self, thread_id: int) -> int:
+        print(f"Fetching original poster ID for thread_id: {thread_id}")
         interaction_data = await db_access_with_retry("SELECT user_id FROM interactions WHERE thread_id = ?", (thread_id,))
+        print(f"Database query result: {interaction_data}")
         return interaction_data[0][0] if interaction_data else None
 
     async def create_points_embed(self, user: disnake.User, total_points: int, reasons: List[tuple]) -> Embed:
