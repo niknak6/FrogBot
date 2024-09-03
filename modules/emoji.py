@@ -167,6 +167,30 @@ class EmojiCog(commands.Cog):
                 await log_checkmark_message_id(reply_message.id, channel.id, timestamp)
                 await view.start_countdown()
 
+    async def handle_thumbsup_reaction(self, payload: disnake.RawReactionActionEvent):
+        channel = self.bot.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        
+        if message.author.id == self.bot.user.id:
+            embed = disnake.Embed(
+                title="Thank You!",
+                description="Thank you for your positive feedback!",
+                color=disnake.Color.green()
+            )
+            await message.reply(embed=embed)
+    
+    async def handle_thumbsdown_reaction(self, payload: disnake.RawReactionActionEvent):
+        channel = self.bot.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        
+        if message.author.id == self.bot.user.id:
+            embed = disnake.Embed(
+                title="Sorry!",
+                description="We're sorry to hear that. We'll strive to do better.",
+                color=disnake.Color.red()
+            )
+            await message.reply(embed=embed)
+
     class ResolutionView(View):
         REMINDER_TIME = 12 * 60 * 60
         
