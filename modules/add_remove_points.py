@@ -6,6 +6,7 @@ from modules.roles import check_user_points
 from modules.utils.commons import is_admin
 from disnake.ext import commands
 from disnake import User
+import logging
 
 class PointsCog(commands.Cog):
     def __init__(self, bot):
@@ -22,9 +23,9 @@ class PointsCog(commands.Cog):
         await self.handle_points_command(ctx, points, user, "remove", reason)
 
     async def handle_points_command(self, ctx, points, user, action, reason):
-        print(f"{action.capitalize()}ing points: Points: {points}, User: {user}")
+        logging.error(f"{action.capitalize()}ing points: Points: {points}, User: {user}")
         if points < 0:
-            print("Invalid points.")
+            logging.error("Invalid points.")
             await ctx.send("Points must be a positive number.")
             return
         await initialize_points_database(user)

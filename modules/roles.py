@@ -2,6 +2,7 @@
 
 from modules.utils.database import db_access_with_retry
 from modules.utils.progression import role_thresholds
+import logging
 import disnake
 
 CHANNEL_ID = 1178764276157141093
@@ -9,7 +10,7 @@ CHANNEL_ID = 1178764276157141093
 async def get_guild(client):
     guild = client.guilds[0] if client.guilds else None
     if guild is None:
-        print("Guild not found. Make sure the bot is in the guild.")
+        logging.error("Guild not found. Make sure the bot is in the guild.")
         return None
     if not guild.chunked:
         await guild.chunk(cache=True)
@@ -39,7 +40,7 @@ async def check_user_points(client):
     for user_id, points in user_points_data:
         member = guild.get_member(user_id)
         if member is None:
-            print(f"Member with ID {user_id} not found in guild.")
+            logging.error(f"Member with ID {user_id} not found in guild.")
             continue
         appropriate_role = next((guild.get_role(role_id) for threshold, role_id in sorted(role_thresholds.items(), reverse=True) if points >= threshold), None)
         highest_existing_role = max(member.roles, key=lambda r: r.position, default=None)
@@ -47,6 +48,6 @@ async def check_user_points(client):
         try:
             await manage_roles(member, appropriate_role, is_upgrade, notification_channel)
         except disnake.Forbidden:
-            print(f"Bot doesn't have permission to manage roles for {member}")
+            logging.error(f"Bot doesn't have permission to manage roles for {member}")
         except disnake.HTTPException as e:
-            print(f"HTTP request failed: {e}")
+            logging.error(f"HTTP request failed: {e}")

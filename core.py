@@ -8,6 +8,7 @@ from disnake.ext import commands
 from pathlib import Path
 import importlib.util
 import subprocess
+import logging
 import asyncio
 import disnake
 import yaml
@@ -55,9 +56,8 @@ def load_module(file_path, name):
             attr = getattr(module, attr_name)
             if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
                 client.add_cog(attr(client))
-                print(f"Imported cog: {attr.__name__}")
     except Exception as e:
-        print(f"Error loading module {name}: {e}")
+        logging.error(f"Error loading module {name}: {e}")
 
 def load_modules():
     cogs_dir = "modules"
@@ -69,9 +69,12 @@ def load_modules():
                     executor.submit(load_module, file_path, f"{Path(root).name}.{file[:-3]}")
 
 async def run_subprocess(*args):
-    proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-    stdout, stderr = await proc.communicate()
-    return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+    try:
+        proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, stderr = await proc.communicate()
+        return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+    except Exception as e:
+        return -1, "", str(e)
 
 async def restart_bot(ctx, message_id, channel_id):
     try:
@@ -80,7 +83,6 @@ async def restart_bot(ctx, message_id, channel_id):
         await asyncio.sleep(3)
         subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
         await ctx.bot.close()
-        sys.exit(0)
     except Exception as e:
         await ctx.edit_original_response(content=f"Error restarting the bot: {e}")
 
@@ -135,15 +137,15 @@ async def shutdown_listener(inter):
     if inter.component.custom_id == "shutdown_yes":
         await inter.response.edit_message(content="Shutting down...", components=[])
         await inter.bot.close()
-        sys.exit(0)
     elif inter.component.custom_id == "shutdown_no":
         await inter.response.edit_message(content="Bot shutdown canceled.", components=[])
 
 def get_git_version():
     try:
+        version = read_config().get('version', 'unknown-version')
         branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
-        return f"v2.7 {branch} {commit}"
+        return f"{version} {branch} {commit}"
     except subprocess.CalledProcessError:
         return "unknown-version"
 
@@ -155,9 +157,11 @@ async def on_ready():
     print(f'Logged in as {client.user.name}')
     try:
         config = read_config()
-        restart_channel_id = int(config.get('restart_channel_id', 0))
-        restart_message_id = int(config.get('restart_message_id', 0))
+        restart_channel_id = config.get('restart_channel_id', 0)
+        restart_message_id = config.get('restart_message_id', 0)
         if restart_channel_id and restart_message_id:
+            restart_channel_id = int(restart_channel_id)
+            restart_message_id = int(restart_message_id)
             channel = client.get_channel(restart_channel_id)
             if channel:
                 message = await channel.fetch_message(restart_message_id)
@@ -166,14 +170,16 @@ async def on_ready():
                     await channel.send("I'm back online!")
         update_config('restart_channel_id', '')
         update_config('restart_message_id', '')
+    except ValueError:
+        pass
     except Exception as e:
-        print(f"Error sending restart message: {e}")
+        logging.error(f"Error sending restart message: {e}")
 
 if __name__ == "__main__":
     load_modules()
     try:
         client.run(read_config().get('DISCORD_TOKEN'))
     except Exception as e:
-        print(f"An error occurred while trying to run the Discord client: {e}")
+        logging.error(f"An error occurred while trying to run the Discord client: {e}")
 
 '''Kaofui was here uwu'''

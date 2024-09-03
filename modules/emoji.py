@@ -5,6 +5,7 @@ from disnake import Embed, ButtonStyle
 from disnake.ui import View, Button
 from disnake.ext import commands
 from typing import Dict, List
+import logging
 import disnake
 import asyncio
 import time
@@ -48,7 +49,7 @@ class EmojiCog(commands.Cog):
             try:
                 channel = self.bot.get_channel(channel_id)
                 if channel is None:
-                    print(f"Channel ID {channel_id} not found. Removing from database.")
+                    logging.error(f"Channel ID {channel_id} not found. Removing from database.")
                     await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
                     continue
                 message = await channel.fetch_message(message_id)
@@ -61,10 +62,10 @@ class EmojiCog(commands.Cog):
                 else:
                     await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
             except disnake.NotFound:
-                print(f"Message ID {message_id} not found. Removing from database.")
+                logging.error(f"Message ID {message_id} not found. Removing from database.")
                 await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
             except Exception as e:
-                print(f"Failed to reactivate 'No' button for message ID {message_id}: {e}")
+                logging.error(f"Failed to reactivate 'No' button for message ID {message_id}: {e}")
                 await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
 
     @commands.Cog.listener()
@@ -170,7 +171,6 @@ class EmojiCog(commands.Cog):
     async def handle_thumbsup_reaction(self, payload: disnake.RawReactionActionEvent):
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        
         if message.author.id == self.bot.user.id:
             embed = disnake.Embed(
                 title="Thank You!",
@@ -182,7 +182,6 @@ class EmojiCog(commands.Cog):
     async def handle_thumbsdown_reaction(self, payload: disnake.RawReactionActionEvent):
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        
         if message.author.id == self.bot.user.id:
             embed = disnake.Embed(
                 title="Sorry!",
@@ -233,5 +232,6 @@ class EmojiCog(commands.Cog):
                 description="We're sorry that your issue/request was not resolved. Please provide more details for further assistance.",
                 color=disnake.Color.red()
             )
+
 def setup(bot):
     bot.add_cog(EmojiCog(bot))

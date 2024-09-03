@@ -13,10 +13,10 @@ from disnake.ext import commands
 from core import read_config
 import traceback
 import tiktoken
+import logging
 import disnake
 import asyncio
 import openai
-import torch
 
 class HistoryChatMessage:
     def __init__(self, content, role, user_name=None):
@@ -49,7 +49,7 @@ async def fetch_reply_chain(message, max_tokens=8192):
                     msg = await msg.channel.fetch_message(msg.reference.message_id)
                     messages_to_process.append(msg)
                 except Exception as e:
-                    print(f"Error fetching reply chain message: {e}")
+                    logging.error(f"Error fetching reply chain message: {e}")
                     break
             else:
                 break
@@ -60,7 +60,7 @@ async def fetch_reply_chain(message, max_tokens=8192):
             thread_starter = await message.channel.parent.fetch_message(message.channel.id)
             await process_message_chain(thread_starter)
         except Exception as e:
-            print(f"Error fetching thread starter message: {e}")
+            logging.error(f"Error fetching thread starter message: {e}")
         async for msg in message.channel.history(limit=None, oldest_first=False):
             if not await process_message_chain(msg):
                 break
@@ -70,7 +70,7 @@ async def fetch_reply_chain(message, max_tokens=8192):
 
 openai.api_key = read_config().get('OPENAI_API_KEY')
 Settings.llm = OpenAI(model='gpt-4o-mini', max_tokens=1000)
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cuda" if torch.cuda.is_available() else "cpu")
+Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
 
 search_spec = DuckDuckGoSearchToolSpec()
 def site_search(input, site):
@@ -188,7 +188,7 @@ class OpenPilotAssistant(commands.Cog):
             await ctx.send("Sorry, I didn't understand that command.")
         else:
             tb_str = "".join(traceback.format_exception(type(error), error, error.__traceback__))
-            print(f'An error occurred: {error}\n{tb_str}')
+            logging.error(f'An error occurred: {error}\n{tb_str}')
 
 def setup(client):
     client.add_cog(OpenPilotAssistant(client))

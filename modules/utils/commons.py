@@ -1,6 +1,7 @@
 # modules.utils.commons
 
 from disnake.ext import commands
+import logging
 import disnake
 import re
 
@@ -14,7 +15,7 @@ async def send_message(message, content, should_reply):
         else:
             return await message.channel.send(content)
     except Exception as e:
-        print(f"Error sending message: {e}")
+        logging.error(f"Error sending message: {e}")
         return None
 
 def split_message(response):
@@ -64,14 +65,14 @@ async def send_long_message(message, response, should_reply=True):
             message = last_message
         return messages
     except Exception as e:
-        print(f"Error in send_long_message: {e}")
+        logging.error(f"Error in send_long_message: {e}")
         return None
 
 def is_admin():
     async def predicate(ctx):
         author = ctx.user
         is_admin = author.guild_permissions.administrator
-        print(f"Checking admin status for {author} (ID: {author.id}): {is_admin}")
+        logging.error(f"Checking admin status for {author} (ID: {author.id}): {is_admin}")
         return is_admin
     return commands.check(predicate)
 
