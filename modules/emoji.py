@@ -212,6 +212,7 @@ class EmojiCog(commands.Cog):
             await asyncio.sleep(self.remaining_time / 2)
             if isinstance(self.message.channel, disnake.Thread):
                 await self.message.channel.delete()
+                await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (self.message.id,))
         
         async def send_reminder(self):
             reminder_embed = disnake.Embed(
@@ -225,13 +226,12 @@ class EmojiCog(commands.Cog):
             if self.countdown_task:
                 self.countdown_task.cancel()
             await interaction.message.edit(embed=self.create_followup_embed(), view=self.clear_items())
-
+    
         def create_followup_embed(self):
             return disnake.Embed(
                 title="Further Assistance Needed",
                 description="We're sorry that your issue/request was not resolved. Please provide more details for further assistance.",
                 color=disnake.Color.red()
             )
-
 def setup(bot):
     bot.add_cog(EmojiCog(bot))
