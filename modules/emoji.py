@@ -1,12 +1,13 @@
 # modules.emoji
 
-from modules.utils.database import db_access_with_retry, update_points
+from modules.utils.database import db_access_with_retry, update_points, log_checkmark_message_id
 from disnake import Embed, ButtonStyle
 from disnake.ui import View, Button
 from disnake.ext import commands
 from typing import Dict, List
 import disnake
 import asyncio
+import time
 
 ADMIN_USER_ID = 126123710435295232
 
@@ -34,6 +35,37 @@ class EmojiCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.bot_replies: Dict[int, Dict] = {}
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        await self.reactivate_no_buttons()
+
+    async def reactivate_no_buttons(self):
+        rows = await db_access_with_retry('SELECT message_id, channel_id, timestamp FROM checkmark_logs')
+        current_time = int(time.time())
+        for row in rows:
+            message_id, channel_id, timestamp = row
+            try:
+                channel = self.bot.get_channel(channel_id)
+                if channel is None:
+                    print(f"Channel ID {channel_id} not found. Removing from database.")
+                    await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
+                    continue
+                message = await channel.fetch_message(message_id)
+                elapsed_time = current_time - timestamp
+                remaining_time = self.ResolutionView.REMINDER_TIME * 2 - elapsed_time
+                if remaining_time > 0:
+                    view = self.ResolutionView(message, remaining_time)
+                    await message.edit(view=view)
+                    await view.start_countdown()
+                else:
+                    await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
+            except disnake.NotFound:
+                print(f"Message ID {message_id} not found. Removing from database.")
+                await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
+            except Exception as e:
+                print(f"Failed to reactivate 'No' button for message ID {message_id}: {e}")
+                await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: disnake.RawReactionActionEvent):
@@ -115,7 +147,7 @@ class EmojiCog(commands.Cog):
         embed.add_field(name="Total Points", value=f"{total_points}", inline=True)
         embed.set_footer(text=f"Updated on {disnake.utils.utcnow().strftime('%Y-%m-%d')} | Use '/check_points' for more info.")
         return embed
-    
+
     async def handle_checkmark_reaction(self, payload: disnake.RawReactionActionEvent):
         guild = self.bot.get_guild(payload.guild_id)
         user = guild.get_member(payload.user_id)
@@ -125,35 +157,38 @@ class EmojiCog(commands.Cog):
                 message = await channel.fetch_message(payload.message_id)
                 embed = disnake.Embed(
                     title="Resolve the Issue/Request",
-                    description="@here Has this issue or request been resolved? Anyone can click **No** if it hasn't.\n",
+                    description="@here Has this issue or request been resolved? __Anyone__ can click **No** if it hasn't.\n",
                     color=disnake.Color.green()
                 )
                 embed.set_footer(text="This thread will close automatically in 24 hours unless 'No' is clicked.")
                 view = self.ResolutionView(message)
-                await message.reply(embed=embed, view=view)
+                reply_message = await message.reply(embed=embed, view=view)
+                timestamp = int(time.time())
+                await log_checkmark_message_id(reply_message.id, channel.id, timestamp)
                 await view.start_countdown()
 
     class ResolutionView(View):
         REMINDER_TIME = 12 * 60 * 60
-    
-        def __init__(self, message):
+        
+        def __init__(self, message, remaining_time=None):
             super().__init__()
             self.message = message
             self.countdown_task = None
+            self.remaining_time = remaining_time or self.REMINDER_TIME * 2
             no_button = Button(style=ButtonStyle.red, label="No")
             no_button.callback = self.on_no_button_clicked
             self.add_item(no_button)
-    
+        
         async def start_countdown(self):
             self.countdown_task = asyncio.create_task(self.countdown_with_reminder())
-    
+        
         async def countdown_with_reminder(self):
-            await asyncio.sleep(self.REMINDER_TIME)
+            await asyncio.sleep(self.remaining_time / 2)
             await self.send_reminder()
-            await asyncio.sleep(self.REMINDER_TIME)
+            await asyncio.sleep(self.remaining_time / 2)
             if isinstance(self.message.channel, disnake.Thread):
                 await self.message.channel.delete()
-    
+        
         async def send_reminder(self):
             reminder_embed = disnake.Embed(
                 title="Reminder",
@@ -161,12 +196,12 @@ class EmojiCog(commands.Cog):
                 color=disnake.Color.orange()
             )
             await self.message.reply(embed=reminder_embed)
-    
+        
         async def on_no_button_clicked(self, interaction):
             if self.countdown_task:
                 self.countdown_task.cancel()
             await interaction.message.edit(embed=self.create_followup_embed(), view=self.clear_items())
-    
+
         def create_followup_embed(self):
             return disnake.Embed(
                 title="Further Assistance Needed",

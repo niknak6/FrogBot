@@ -15,6 +15,13 @@ async def initialize_database():
                     points INTEGER NOT NULL DEFAULT 0
                 )
             ''')
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS checkmark_logs (
+                    message_id INTEGER PRIMARY KEY,
+                    channel_id INTEGER NOT NULL,
+                    timestamp INTEGER NOT NULL
+                )
+            ''')
             await conn.commit()
     except Exception as e:
         logging.error(f"Error initializing database: {e}")
@@ -58,3 +65,11 @@ async def get_user_points(user_id):
     if rows:
         return rows[0][0]
     return 0
+
+async def log_checkmark_message_id(message_id, channel_id, timestamp):
+    try:
+        await db_access_with_retry('INSERT INTO checkmark_logs (message_id, channel_id, timestamp) VALUES (?, ?, ?)', (message_id, channel_id, timestamp))
+        return True
+    except Exception as e:
+        logging.error(f"Failed to log checkmark message ID: {e}")
+        return False
