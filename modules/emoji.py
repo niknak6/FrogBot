@@ -11,6 +11,7 @@ import asyncio
 import time
 
 ADMIN_USER_ID = 126123710435295232
+ROLE_ID = 1221297807214776381
 
 EMOJI_ACTIONS = {
     "👍": "handle_thumbsup_reaction",
@@ -152,7 +153,8 @@ class EmojiCog(commands.Cog):
     async def handle_checkmark_reaction(self, payload: disnake.RawReactionActionEvent):
         guild = self.bot.get_guild(payload.guild_id)
         user = guild.get_member(payload.user_id)
-        if user.guild_permissions.administrator or user.id == ADMIN_USER_ID:
+        role = guild.get_role(ROLE_ID)
+        if user.guild_permissions.administrator or user.id == ADMIN_USER_ID or role in user.roles:
             channel = self.bot.get_channel(payload.channel_id)
             if isinstance(channel, disnake.Thread):
                 message = await channel.fetch_message(payload.message_id)
