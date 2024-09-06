@@ -22,7 +22,6 @@ class TicTacToeButton(ui.Button):
             state.board[self.x][self.y] = 'X' if state.current_player == state.users[0] else 'O'
             self.label = state.board[self.x][self.y]
             self.disabled = True
-
             if state.check_winner() or '-' not in [item for sublist in state.board for item in sublist]:
                 for item in state.children:
                     if isinstance(item, TicTacToeButton):
@@ -32,10 +31,8 @@ class TicTacToeButton(ui.Button):
                 else:
                     await interaction.response.edit_message(content="It's a draw!", view=state)
                 return
-            
             state.switch_player()
             await interaction.response.edit_message(content=f"It's {state.current_player.mention}'s turn", view=state)
-            
             if state.current_player == state.bot:
                 await asyncio.sleep(0.5)
                 await state.bot_move(interaction)
@@ -67,7 +64,6 @@ class TicTacToe(ui.View):
                     item.label = self.board[x][y]
                     item.disabled = True
                     break
-            
             if self.check_winner() or '-' not in [item for sublist in self.board for item in sublist]:
                 for item in self.children:
                     if isinstance(item, TicTacToeButton):
@@ -77,7 +73,6 @@ class TicTacToe(ui.View):
                 else:
                     await interaction.edit_original_message(content="It's a draw!", view=self)
                 return
-            
             self.switch_player()
             await interaction.edit_original_message(content=f"It's {self.current_player.mention}'s turn", view=self)
 

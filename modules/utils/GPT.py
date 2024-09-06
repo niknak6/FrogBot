@@ -31,41 +31,46 @@ async def fetch_reply_chain(message, max_tokens=8192):
     tokens_used = 0
     remaining_tokens = max_tokens - count_tokens(message.content)
     processed_message_ids = set()
-    async def process_message_chain(msg):
+    async def process_message(msg):
         nonlocal tokens_used
-        messages_to_process = []
+        if msg.id in processed_message_ids or tokens_used >= remaining_tokens:
+            return False
+        processed_message_ids.add(msg.id)
+        role = Role.ASSISTANT if msg.author.bot else Role.USER
+        message_tokens = count_tokens(msg.content)
+        if tokens_used + message_tokens > remaining_tokens:
+            return False
+        context.append(HistoryChatMessage(msg.content, role, msg.author.name))
+        tokens_used += message_tokens
+        return True
+    async def process_thread(thread):
+        try:
+            thread_starter = await thread.parent.fetch_message(thread.id)
+            messages = [thread_starter] + [msg async for msg in thread.history(limit=None, oldest_first=False)]
+            for msg in reversed(messages):
+                if not await process_message(msg):
+                    break
+        except Exception as e:
+            logging.error(f"Error processing thread: {e}")
+    async def process_reply_chain(msg):
+        messages = []
         while msg and tokens_used < remaining_tokens:
-            if msg.id in processed_message_ids:
-                break
-            processed_message_ids.add(msg.id)
-            role = Role.ASSISTANT if msg.author.bot else Role.USER
-            message_tokens = count_tokens(msg.content)
-            if tokens_used + message_tokens > remaining_tokens:
-                break
-            context.append(HistoryChatMessage(msg.content, role, msg.author.name))
-            tokens_used += message_tokens
+            messages.append(msg)
             if msg.reference:
                 try:
                     msg = await msg.channel.fetch_message(msg.reference.message_id)
-                    messages_to_process.append(msg)
                 except Exception as e:
                     logging.error(f"Error fetching reply chain message: {e}")
                     break
             else:
                 break
-        for msg in reversed(messages_to_process):
-            await process_message_chain(msg)
-    if isinstance(message.channel, disnake.Thread):
-        try:
-            thread_starter = await message.channel.parent.fetch_message(message.channel.id)
-            await process_message_chain(thread_starter)
-        except Exception as e:
-            logging.error(f"Error fetching thread starter message: {e}")
-        async for msg in message.channel.history(limit=None, oldest_first=False):
-            if not await process_message_chain(msg):
+        for msg in reversed(messages):
+            if not await process_message(msg):
                 break
+    if isinstance(message.channel, disnake.Thread):
+        await process_thread(message.channel)
     else:
-        await process_message_chain(message)
+        await process_reply_chain(message)
     return context[::-1]
 
 openai.api_key = read_config().get('OPENAI_API_KEY')
