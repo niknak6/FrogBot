@@ -1,11 +1,12 @@
 # modules.translate
 
-from disnake import TextInputStyle, ui, Embed, Color, ApplicationCommandInteraction, MessageCommandInteraction, Thread
+from disnake import Embed, Color, ApplicationCommandInteraction, Thread, TextInputStyle, ModalInteraction
 from modules.utils.GPT import OpenAIAgent
+from typing import Optional, Set, Dict
 from disnake.ext import commands
+import disnake
 import asyncio
 import re
-from typing import Optional, Tuple, Set, Dict
 
 TIMEOUT = 300
 TRANSLATE_MODAL_ID = 'translate_modal'
@@ -19,9 +20,8 @@ class TranslateCog(commands.Cog):
             system_prompt="You are a translator. Translate the following message to the specified language. If the source language is not specified, detect it automatically. Provide only the translated text without any additional explanations.",
             verbose=False
         )
-        self.auto_translate_threads: Dict[int, Tuple[str, str]] = {}
+        self.auto_translate_threads: Dict[int, Set[str]] = {}
         self.user_language_preferences: Dict[int, str] = {}
-        self.auto_translate_opt_in: Set[int] = set()
 
     @commands.slash_command(
         name="translate",
@@ -31,84 +31,146 @@ class TranslateCog(commands.Cog):
     async def translate(
         self,
         inter: ApplicationCommandInteraction,
-        message: Optional[str] = commands.Param(default=None, description="Message to translate"),
         auto: Optional[str] = commands.Param(default=None, choices=["on", "off"], description="Turn auto-translation on/off"),
         set_language: Optional[str] = commands.Param(default=None, description="Set your preferred language"),
-        toggle: Optional[bool] = commands.Param(default=None, description="Toggle opt-in/out of auto-translation"),
-        list_languages: bool = commands.Param(default=False, description="List active languages"),
         status: bool = commands.Param(default=False, description="Show translation status")
     ):
-        if all(param is None for param in [message, auto, set_language, toggle]) and not list_languages and not status:
-            await self.show_translate_modal(inter)
-            return
-
         if auto is not None:
             if not isinstance(inter.channel, Thread):
                 await inter.response.send_message("Auto-translation can only be used in threads.", ephemeral=True)
                 return
-            await self.show_auto_translate_modal(inter) if auto == "on" else await self.turn_off_auto_translate(inter)
-        elif message:
-            await self.show_translate_modal(inter, message)
+            if auto == "on":
+                await self.turn_on_auto_translate(inter)
+            else:
+                await self.turn_off_auto_translate(inter)
         elif set_language:
-            self.user_language_preferences[inter.author.id] = set_language
-            await inter.response.send_message(f"Your preferred language has been set to {set_language}.", ephemeral=True)
-        elif toggle is not None:
-            self.auto_translate_opt_in.symmetric_difference_update({inter.author.id})
-            await inter.response.send_message(f"You have opted {'in' if inter.author.id in self.auto_translate_opt_in else 'out'} of auto-translation.", ephemeral=True)
-        elif list_languages:
-            await self.list_active_languages(inter)
+            await self.set_user_language(inter, set_language)
         elif status:
             await self.show_translation_status(inter)
+        else:
+            await self.show_translate_modal(inter)
 
-    @commands.message_command(name="Translate Message")
-    @commands.cooldown(1, 5, commands.BucketType.user)
-    async def translate_message(self, inter: MessageCommandInteraction):
-        await self.show_translate_modal(inter, inter.target.content, inter.target.author.display_name)
-
-    async def show_translate_modal(self, inter, message=None, author=None):
-        await inter.response.send_modal(
-            title="Translate",
-            custom_id=TRANSLATE_MODAL_ID,
+    async def show_translate_modal(self, inter: ApplicationCommandInteraction):
+        modal = disnake.ui.Modal(
+            title="Translate Text",
+            custom_id="translate_modal",
             components=[
-                ui.TextInput(label="Target Language", placeholder="Enter the target language (e.g., Spanish)", custom_id="target_lang", style=TextInputStyle.short),
-                ui.TextInput(label="Message", value=message, placeholder="Enter the message to translate" if not message else None, custom_id="message", style=TextInputStyle.paragraph, required=not bool(message)),
-                ui.TextInput(label="Source Language (optional)", placeholder="Leave blank for auto-detection", custom_id="source_lang", style=TextInputStyle.short, required=False),
+                disnake.ui.TextInput(
+                    label="Text to translate",
+                    custom_id="text_to_translate",
+                    style=TextInputStyle.paragraph,
+                    max_length=1000,
+                ),
+                disnake.ui.TextInput(
+                    label="Target language",
+                    custom_id="target_language",
+                    style=TextInputStyle.short,
+                    max_length=50,
+                ),
             ],
         )
-        try:
-            modal_inter = await inter.client.wait_for('modal_submit', check=lambda i: i.custom_id == TRANSLATE_MODAL_ID and i.author.id == inter.author.id, timeout=TIMEOUT)
-            message, target_lang, source_lang = modal_inter.text_values.get('message', ''), modal_inter.text_values.get('target_lang', ''), modal_inter.text_values.get('source_lang', '')
-            translated_text = await self.translate_text(self.replace_mentions(inter, message), target_lang, source_lang)
-            await modal_inter.response.send_message(embed=self.create_translation_embed(inter, message, translated_text, target_lang, author, is_auto=False) if translated_text else "❌ Translation error.")
-        except asyncio.TimeoutError:
-            await inter.followup.send("⏰ Translation request timed out.")
+        await inter.response.send_modal(modal)
 
-    async def show_auto_translate_modal(self, inter):
-        await inter.response.send_modal(
-            title="Auto Translate Setup",
-            custom_id=AUTO_TRANSLATE_MODAL_ID,
-            components=[
-                ui.TextInput(label="Target Language", placeholder="Enter the target language (e.g., Spanish)", custom_id="target_lang", style=TextInputStyle.short),
-                ui.TextInput(label="Source Language (optional)", placeholder="Leave blank for auto-detection", custom_id="source_lang", style=TextInputStyle.short, required=False),
-            ],
-        )
-        try:
-            modal_inter = await inter.client.wait_for('modal_submit', check=lambda i: i.custom_id == AUTO_TRANSLATE_MODAL_ID and i.author.id == inter.author.id, timeout=TIMEOUT)
-            source_lang, target_lang = modal_inter.text_values.get('source_lang', 'auto'), modal_inter.text_values.get('target_lang', '')
-            self.auto_translate_threads[inter.channel.id] = (source_lang, target_lang)
-            await modal_inter.response.send_message(f"Auto-translation enabled in this thread. Source: {'Auto-detect' if source_lang == 'auto' else source_lang}, Target: {target_lang}")
-        except asyncio.TimeoutError:
-            await inter.followup.send("⏰ Auto-translation setup timed out.")
+    @commands.Cog.listener("on_modal_submit")
+    async def on_translate_modal_submit(self, inter: ModalInteraction):
+        if inter.custom_id == "translate_modal":
+            text_to_translate = inter.text_values["text_to_translate"]
+            target_language = inter.text_values["target_language"]
+            translated_text = await self.translate_text(text_to_translate, target_language)
+            if translated_text:
+                translations = {target_language: translated_text}
+                embed = self.create_multi_translation_embed(inter, text_to_translate, translations)
+                await inter.response.send_message(embed=embed)
+            else:
+                await inter.response.send_message("Sorry, I couldn't translate the text. Please try again.", ephemeral=True)
+
+    def create_multi_translation_embed(self, message_or_inter, original_text, translations):
+        embed = Embed(title="🌐 Translation", color=Color.blue())
+        embed.add_field(name="📝 Original", value=f"```{original_text}```", inline=False)
+        for lang, text in translations.items():
+            embed.add_field(name=f"🔄 {lang}", value=f"```{text}```", inline=False)
+        
+        if isinstance(message_or_inter, disnake.Message):
+            author = message_or_inter.author
+        else:
+            author = message_or_inter.author
+        embed.set_author(name=f"Requested by {author.display_name}", icon_url=author.avatar.url if author.avatar else None)
+        embed.set_footer(text="⚠️ This translation was generated by an AI language model and may not be perfectly accurate.")
+        return embed
+
+    async def turn_on_auto_translate(self, inter):
+        if inter.channel.id not in self.auto_translate_threads:
+            self.auto_translate_threads[inter.channel.id] = set()
+        await inter.response.send_message("Auto-translation enabled in this thread. Users can set their preferred language using `/translate set_language`.")
 
     async def turn_off_auto_translate(self, inter):
-        if not isinstance(inter.channel, Thread):
-            await inter.response.send_message("Auto-translation can only be turned off in threads where it was enabled.", ephemeral=True)
-            return
         if inter.channel.id in self.auto_translate_threads:
             del self.auto_translate_threads[inter.channel.id]
             await inter.response.send_message("Auto-translation has been turned off for this thread.")
         else:
             await inter.response.send_message("Auto-translation was not enabled for this thread.")
+
+    async def set_user_language(self, inter, language):
+        self.user_language_preferences[inter.author.id] = language
+        if isinstance(inter.channel, Thread) and inter.channel.id in self.auto_translate_threads:
+            self.auto_translate_threads[inter.channel.id].add(language)
+        await inter.response.send_message(f"Your preferred language has been set to {language}.", ephemeral=True)
+
+    async def show_translation_status(self, inter):
+        if not isinstance(inter.channel, Thread):
+            await inter.response.send_message("Translation status is only available in threads.", ephemeral=True)
+            return
+        thread_id = inter.channel.id
+        if thread_id not in self.auto_translate_threads:
+            await inter.response.send_message("Auto-translation is not enabled in this thread.", ephemeral=True)
+            return
+        active_languages = self.auto_translate_threads[thread_id]
+        user_language = self.user_language_preferences.get(inter.author.id, "Not set")
+        status_message = f"Auto-translation status for this thread:\n"
+        status_message += f"• Enabled: Yes\n"
+        status_message += f"• Active languages: {', '.join(sorted(active_languages))}\n"
+        status_message += f"• Your preferred language: {user_language}"
+        await inter.response.send_message(status_message, ephemeral=True)
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author.bot or not isinstance(message.channel, Thread):
+            return
+        if message.channel.id in self.auto_translate_threads:
+            source_text = self.replace_mentions(message, message.content)
+            translations = {}
+            for target_lang in self.auto_translate_threads[message.channel.id]:
+                if target_lang != self.detect_language(source_text):
+                    translated_text = await self.translate_text(source_text, target_lang)
+                    if translated_text:
+                        translations[target_lang] = translated_text
+            if translations:
+                embed = self.create_auto_translation_embed(message, translations)
+                await message.reply(embed=embed)
+
+    def create_auto_translation_embed(self, message, translations):
+        embed = Embed(title="🌐 Auto-Translations", color=Color.blue())
+        for lang, text in translations.items():
+            embed.add_field(name=f"🔄 {lang}", value=f"```{text}```", inline=False)
+        embed.set_author(name=f"Translations for {message.author.display_name}", icon_url=message.author.avatar.url if message.author.avatar else None)
+        embed.set_footer(text="⚠️ These translations were generated by an AI language model and may not be perfectly accurate.")
+        return embed
+
+    def create_multi_translation_embed(self, message_or_inter, original_text, translations):
+        embed = Embed(title="🌐 Translation", color=Color.blue())
+        embed.add_field(name="📝 Original", value=f"```{original_text}```", inline=False)
+        for lang, text in translations.items():
+            embed.add_field(name=f"🔄 {lang}", value=f"```{text}```", inline=False)
+        if isinstance(message_or_inter, disnake.Message):
+            author = message_or_inter.author
+        else:
+            author = message_or_inter.author
+        embed.set_author(name=f"Requested by {author.display_name}", icon_url=author.avatar.url if author.avatar else None)
+        embed.set_footer(text="⚠️ This translation was generated by an AI language model and may not be perfectly accurate.")
+        return embed
+
+    def detect_language(self, text):
+        return "unknown"
 
     @staticmethod
     def replace_mentions(inter, message):
@@ -119,45 +181,9 @@ class TranslateCog(commands.Cog):
         response = await asyncio.to_thread(self.chat_engine.chat, prompt)
         return response.response.strip() if response and response.response else None
 
-    @staticmethod
-    def create_translation_embed(inter, original_message, translated_text, target_lang, author, is_auto=False):
-        embed = Embed(title=f"🌐 Translation to {target_lang}", color=Color.blue())
-        if not is_auto:
-            embed.add_field(name=f"📝 Original{f' (by {author})' if author else ''}", value=f"```{original_message}```", inline=False)
-        embed.add_field(name="🔄 Translated", value=f"```{translated_text}```", inline=False)
-        embed.set_author(name=f"Requested by {inter.author.display_name}", icon_url=inter.author.avatar.url if inter.author.avatar else None)
-        embed.set_footer(text="⚠️ This translation was generated by an AI language model and may not be perfectly accurate.")
-        return embed
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.bot or not isinstance(message.channel, Thread):
-            return
-        if message.channel.id in self.auto_translate_threads:
-            source_lang, target_lang = self.auto_translate_threads[message.channel.id]
-            translated_text = await self.translate_text(self.replace_mentions(message, message.content), target_lang, source_lang)
-            if translated_text:
-                embed = self.create_translation_embed(message, message.content, translated_text, target_lang, message.author.display_name, is_auto=True)
-                await message.reply(embed=embed)
-
     @translate.error
-    @translate_message.error
     async def translate_error(self, inter, error):
         await inter.response.send_message(f"{'This command is on cooldown. Try again in {:.1f} seconds.'.format(error.retry_after) if isinstance(error, commands.CommandOnCooldown) else f'An error occurred: {error}'}", ephemeral=True)
-
-    async def list_active_languages(self, inter):
-        if not self.auto_translate_threads:
-            await inter.response.send_message("No active auto-translations at the moment.", ephemeral=True)
-            return
-
-        translations = []
-        for thread_id, (source_lang, target_lang) in self.auto_translate_threads.items():
-            thread = inter.guild.get_thread(thread_id)
-            thread_name = thread.name if thread else f"Unknown Thread ({thread_id})"
-            translations.append(f"• {thread_name}: {source_lang} → {target_lang}")
-
-        message = "Active auto-translations:\n" + "\n".join(translations)
-        await inter.response.send_message(message, ephemeral=True)
 
 def setup(client):
     client.add_cog(TranslateCog(client))
