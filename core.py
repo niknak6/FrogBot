@@ -149,7 +149,8 @@ async def update(ctx, branch: str = "beta", restart: bool = False, reload: bool 
         await update_bot(ctx, branch)
         if reload:
             await asyncio.sleep(0.5)
-            await reload_plugins(ctx)
+            reload_ctx = await client.get_slash_context(ctx.interaction)
+            await reload_plugins(reload_ctx)
         if restart:
             await asyncio.sleep(0.5)
             await restart_bot(ctx)
