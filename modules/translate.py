@@ -43,28 +43,24 @@ class TranslateCog(commands.Cog):
             else:
                 await self.turn_off_auto_translate(inter)
         elif set_language:
+            if not isinstance(inter.channel, Thread) or inter.channel.id not in self.auto_translate_threads:
+                await inter.response.send_message("You can only set your language in threads with auto-translation enabled.", ephemeral=True)
+                return
             await self.set_user_language(inter, set_language)
         elif status:
             await self.show_translation_status(inter)
         else:
-            await self.show_translate_modal(inter)
+            await inter.response.send_message("Please use this command with one of the options: `auto`, `set_language`, or `status`. For translating messages, use the message context menu.", ephemeral=True)
 
     @commands.message_command(name="Translate")
     async def translate_message(self, inter: MessageCommandInteraction):
-        await self.show_translate_modal(inter, inter.target.content)
+        await self.show_translate_language_modal(inter)
 
-    async def show_translate_modal(self, inter: ApplicationCommandInteraction, text_to_translate: str = ""):
+    async def show_translate_language_modal(self, inter: MessageCommandInteraction):
         modal = disnake.ui.Modal(
-            title="Translate Text",
-            custom_id="translate_modal",
+            title="Translate Message",
+            custom_id="translate_language_modal",
             components=[
-                disnake.ui.TextInput(
-                    label="Text to translate",
-                    custom_id="text_to_translate",
-                    style=TextInputStyle.paragraph,
-                    max_length=1000,
-                    value=text_to_translate,
-                ),
                 disnake.ui.TextInput(
                     label="Target language",
                     custom_id="target_language",
@@ -80,6 +76,16 @@ class TranslateCog(commands.Cog):
         if inter.custom_id == "translate_modal":
             text_to_translate = inter.text_values["text_to_translate"]
             target_language = inter.text_values["target_language"]
+            translated_text = await self.translate_text(text_to_translate, target_language)
+            if translated_text:
+                translations = {target_language: translated_text}
+                embed = self.create_multi_translation_embed(inter, text_to_translate, translations)
+                await inter.response.send_message(embed=embed)
+            else:
+                await inter.response.send_message("Sorry, I couldn't translate the text. Please try again.", ephemeral=True)
+        elif inter.custom_id == "translate_language_modal":
+            target_language = inter.text_values["target_language"]
+            text_to_translate = inter.target.content
             translated_text = await self.translate_text(text_to_translate, target_language)
             if translated_text:
                 translations = {target_language: translated_text}
