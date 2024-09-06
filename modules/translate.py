@@ -138,15 +138,30 @@ class TranslateCog(commands.Cog):
             return
         if message.channel.id in self.auto_translate_threads:
             source_text = self.replace_mentions(message, message.content)
-            translations = {}
-            for target_lang in self.auto_translate_threads[message.channel.id]:
-                if target_lang != self.detect_language(source_text):
-                    translated_text = await self.translate_text(source_text, target_lang)
-                    if translated_text:
-                        translations[target_lang] = translated_text
+            translations = await self.translate_to_multiple_languages(source_text, self.auto_translate_threads[message.channel.id])
             if translations:
                 embed = self.create_auto_translation_embed(message, translations)
                 await message.reply(embed=embed)
+
+    async def translate_to_multiple_languages(self, text, target_languages):
+        translations = {}
+        source_lang = await self.detect_language(text)
+        for target_lang in target_languages:
+            if target_lang.lower() != source_lang.lower():
+                translated_text = await self.translate_text(text, target_lang, source_lang)
+                if translated_text:
+                    translations[target_lang] = translated_text
+        return translations
+
+    async def detect_language(self, text):
+        prompt = f"Detect the language of the following text and respond with only the language name in English: {text}"
+        response = await asyncio.to_thread(self.chat_engine.chat, prompt)
+        return response.response.strip().lower() if response and response.response else "unknown"
+
+    async def translate_text(self, message, target_lang, source_lang=None):
+        prompt = f"Translate this {'from ' + source_lang + ' ' if source_lang else ''}to {target_lang}: {message}"
+        response = await asyncio.to_thread(self.chat_engine.chat, prompt)
+        return response.response.strip() if response and response.response else None
 
     def create_auto_translation_embed(self, message, translations):
         embed = Embed(title="🌐 Auto-Translations", color=Color.blue())
@@ -175,11 +190,6 @@ class TranslateCog(commands.Cog):
     @staticmethod
     def replace_mentions(inter, message):
         return re.sub(r'<@!?(\d+)>', lambda m: f"@{inter.guild.get_member(int(m.group(1))).display_name}" if inter.guild.get_member(int(m.group(1))) else m.group(0), message)
-
-    async def translate_text(self, message, target_lang, source_lang=None):
-        prompt = f"Translate this to {target_lang}{f' from {source_lang}' if source_lang else ''}: {message}"
-        response = await asyncio.to_thread(self.chat_engine.chat, prompt)
-        return response.response.strip() if response and response.response else None
 
     @translate.error
     async def translate_error(self, inter, error):
