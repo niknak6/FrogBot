@@ -114,10 +114,12 @@ class TranslateCog(commands.Cog):
             await inter.response.send_message("Auto-translation was not enabled for this thread.")
 
     async def set_user_language(self, inter, language):
+        if not isinstance(inter.channel, Thread) or inter.channel.id not in self.auto_translate_threads:
+            await inter.response.send_message("You can only set your preferred language in threads with auto-translation enabled.", ephemeral=True)
+            return
         self.user_language_preferences[inter.author.id] = language
-        if isinstance(inter.channel, Thread) and inter.channel.id in self.auto_translate_threads:
-            self.auto_translate_threads[inter.channel.id].add(language)
-        await inter.response.send_message(f"Your preferred language has been set to {language}.", ephemeral=True)
+        self.auto_translate_threads[inter.channel.id].add(language)
+        await inter.response.send_message(f"Your preferred language has been set to {language} for this thread.", ephemeral=True)
 
     async def show_translation_status(self, inter):
         if not isinstance(inter.channel, Thread):
