@@ -8,6 +8,7 @@ from disnake.ext import commands
 from core import read_config
 import asyncio
 import disnake
+import re
 
 TIMEOUT = 300
 TRANSLATE_MODAL_ID = 'translate_modal'
@@ -57,6 +58,11 @@ class TranslateCog(commands.Cog):
             )
             message = modal_inter.text_values.get('message', '')
             target_lang = modal_inter.text_values.get('target_lang', '')
+            def replace_mention(match):
+                user_id = int(match.group(1))
+                user = inter.guild.get_member(user_id)
+                return f"@{user.display_name}" if user else match.group(0)
+            message = re.sub(r'<@!?(\d+)>', replace_mention, message)
             chat_engine = SimpleChatEngine.from_defaults(
                 system_prompt=f"You are a translator. Translate the following message to {target_lang}. "
                                "Provide only the translated text without any additional explanations.",
