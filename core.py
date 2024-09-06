@@ -77,25 +77,6 @@ def load_modules():
                     file_path = os.path.join(root, file)
                     executor.submit(load_module, file_path, f"{Path(root).name}.{file[:-3]}")
 
-@client.slash_command(name="reload_plugins", description="Reload all plugins")
-@is_admin_or_user()
-async def reload_plugins(ctx):
-    await ctx.response.defer(ephemeral=True)
-    try:
-        message = await ctx.original_response()
-        await message.edit(content="Reloading plugins...")
-        existing_commands = client.all_commands.copy()
-        for cog_name in list(client.cogs.keys()):
-            client.remove_cog(cog_name)
-        load_modules()
-        for cmd_name, cmd in existing_commands.items():
-            if cmd_name not in client.all_commands:
-                client.add_application_command(cmd)
-        await message.edit(content="All plugins have been reloaded successfully!")
-    except Exception as e:
-        logging.error(f"Error reloading plugins: {e}")
-        await ctx.edit_original_response(content=f"An error occurred while reloading plugins: {str(e)}")
-
 async def run_subprocess(*args):
     try:
         proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
@@ -144,18 +125,43 @@ async def update_bot(ctx, branch: str):
 @client.slash_command(description="Update and optionally restart the bot.")
 @is_admin_or_user()
 async def update(ctx, branch: str = "beta", restart: bool = False, reload: bool = False):
-    await ctx.response.defer()
+    await ctx.response.defer(ephemeral=True)
+    message = await ctx.original_response()
     try:
         await update_bot(ctx, branch)
+        await message.edit(content="Update completed.")
         if reload:
             await asyncio.sleep(0.5)
-            reload_ctx = await client.get_slash_context(ctx.interaction)
-            await reload_plugins(reload_ctx)
+            await message.edit(content="Reloading plugins...")
+            await reload_plugins(ctx, message)
         if restart:
             await asyncio.sleep(0.5)
             await restart_bot(ctx)
-    except Exception:
-        pass
+        elif not restart:
+            await message.edit(content="Update and reload process completed.")
+    except Exception as e:
+        await message.edit(content=f"Error during update process: {str(e)}")
+        logging.error(f"Error during update process: {e}")
+
+@client.slash_command(name="reload_plugins", description="Reload all plugins")
+@is_admin_or_user()
+async def reload_plugins(ctx, message=None):
+    if not message:
+        await ctx.response.defer(ephemeral=True)
+        message = await ctx.original_response()
+    try:
+        await message.edit(content="Reloading plugins...")
+        existing_commands = client.all_commands.copy()
+        for cog_name in list(client.cogs.keys()):
+            client.remove_cog(cog_name)
+        load_modules()
+        for cmd_name, cmd in existing_commands.items():
+            if cmd_name not in client.all_commands:
+                client.add_application_command(cmd)
+        await message.edit(content="All plugins have been reloaded successfully!")
+    except Exception as e:
+        logging.error(f"Error reloading plugins: {e}")
+        await message.edit(content=f"An error occurred while reloading plugins: {str(e)}")
 
 @client.slash_command(description="Restart the bot.")
 @is_admin_or_user()
