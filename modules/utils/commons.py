@@ -8,61 +8,54 @@ import re
 async def send_message(message, content, should_reply):
     try:
         if should_reply:
-            if isinstance(message, disnake.Thread):
-                return await message.send(content)
-            else:
-                return await message.reply(content)
+            return await (message.send(content) if isinstance(message, disnake.Thread) else message.reply(content))
         else:
             return await message.channel.send(content)
     except Exception as e:
         logging.error(f"Error sending message: {e}")
         return None
 
-def split_message(response):
-    max_length = 1950
-    markdown_chars = ['*', '_', '~', '|']
-    words = response.split(' ')
+def split_message(response, max_length=1950):
     parts = []
     current_part = ''
-    code_block_type = None
-    for word in words:
-        if len(current_part) + len(word) + 1 > max_length:
-            for char in markdown_chars:
-                if current_part.count(char) % 2 != 0 and not current_part.endswith('```'):
-                    if current_part.rfind(char) > 0 and current_part[current_part.rfind(char) - 1] in [' ', '\n'] and current_part[current_part.rfind(char) + 1] in [' ', '\n']:
-                        current_part += char
-            code_block_start = current_part.rfind('```')
-            code_block_end = current_part.rfind('```', code_block_start + 3)
-            if code_block_start != -1 and (code_block_end == -1 or code_block_end < code_block_start):
-                code_block_type = current_part[code_block_start + 3:].split('\n', 1)[0]
-                current_part += '```'
-                word = '```' + (code_block_type + '\n' if code_block_type else '') + word
-            parts.append(current_part.strip())
-            current_part = ''
-        current_part += ' ' + word
-    parts.append(current_part.strip())
+    code_block = False
+    code_lang = ''
+    for line in response.split('\n'):
+        if line.startswith('```'):
+            code_block = not code_block
+            code_lang = line[3:] if code_block else ''
+        if len(current_part) + len(line) + 1 > max_length:
+            if code_block:
+                current_part += '```\n'
+                parts.append(current_part)
+                current_part = f'```{code_lang}\n{line}\n'
+            else:
+                parts.append(current_part)
+                current_part = line + '\n'
+        else:
+            current_part += line + '\n'
+    if current_part:
+        parts.append(current_part)
     return parts
+
+def process_links(text):
+    text = re.sub(r'\[([^\]]+)\]\((http[s]?://\S+)\)', r'\1 <\2>', text)
+    return re.sub(r'(?<![<\(])http[s]?://\S+(?![>\)])', r'<\g<0>>', text)
 
 async def send_long_message(message, response, should_reply=True):
     try:
-        chunks = re.split(r'(```.*?```)', response, flags=re.DOTALL)
-        result = ''
-        for chunk in chunks:
-            if chunk.startswith('```'):
-                result += chunk
-            else:
-                chunk = re.sub(r'\((http[s]?://\S+)\)', r'(<\1>)', chunk)
-                chunk = re.sub(r'(?<![\(<`])http[s]?://\S+(?![>\).,`])', r'<\g<0>>', chunk)
-                result += chunk
-        response = result
-        messages = []
+        response = process_links(response)
         parts = split_message(response)
-        for part in parts:
-            last_message = await send_message(message, part, should_reply)
+        messages = []
+        for i, part in enumerate(parts):
+            if i == 0:
+                last_message = await send_message(message, part, should_reply)
+            else:
+                last_message = await send_message(last_message, part, False)
+            
             if last_message is None:
                 break
             messages.append(last_message)
-            message = last_message
         return messages
     except Exception as e:
         logging.error(f"Error in send_long_message: {e}")
