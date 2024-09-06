@@ -2,9 +2,9 @@
 
 from disnake.ui import Button, View
 from disnake.ext import commands
+import logging
 import asyncio
 import disnake
-import logging
 
 EMOJI_MAP = {
     1162100167110053888: ["🐞", "📜", "📹", "✅"],
@@ -28,15 +28,19 @@ class ThreadCreateCog(commands.Cog):
             super().__init__()
             self.message = message
             self.original_poster_id = original_poster_id
-            self.add_item(Button(style=disnake.ButtonStyle.green, label="Done!", custom_id="done_button"))
+            done_button = Button(style=disnake.ButtonStyle.green, label="Done!")
+            done_button.callback = self.on_done_button_clicked
+            self.add_item(done_button)
 
-        @disnake.ui.button(label="Done!", style=disnake.ButtonStyle.green, custom_id="done_button")
-        async def on_done_button(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
+        async def on_done_button_clicked(self, interaction):
             if interaction.user.id != self.original_poster_id:
-                await interaction.response.send_message("Only the original poster can mark this as done.", ephemeral=True)
                 return
-            await self.message.edit(content='*The user has selected "done"*', embed=None, view=None)
-            self.stop()
+            done_embed = disnake.Embed(
+                title="Bug Report Complete",
+                description="The user has indicated they added all the information they want to their bug report.",
+                color=disnake.Color.green()
+            )
+            await self.message.edit(embed=done_embed, view=None)
 
     async def handle_bug_report(self, thread):
         original_message = await thread.fetch_message(thread.id)
