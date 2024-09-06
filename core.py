@@ -82,6 +82,8 @@ def load_modules():
 async def reload_plugins(ctx):
     await ctx.response.defer(ephemeral=True)
     try:
+        message = await ctx.original_response()
+        await message.edit(content="Reloading plugins...")
         existing_commands = client.all_commands.copy()
         for cog_name in list(client.cogs.keys()):
             client.remove_cog(cog_name)
@@ -89,7 +91,7 @@ async def reload_plugins(ctx):
         for cmd_name, cmd in existing_commands.items():
             if cmd_name not in client.all_commands:
                 client.add_application_command(cmd)
-        await ctx.edit_original_response(content="All plugins have been reloaded successfully!")
+        await message.edit(content="All plugins have been reloaded successfully!")
     except Exception as e:
         logging.error(f"Error reloading plugins: {e}")
         await ctx.edit_original_response(content=f"An error occurred while reloading plugins: {str(e)}")
