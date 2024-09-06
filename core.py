@@ -68,78 +68,6 @@ def load_modules():
                     file_path = os.path.join(root, file)
                     executor.submit(load_module, file_path, f"{Path(root).name}.{file[:-3]}")
 
-async def run_subprocess(*args):
-    try:
-        proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await proc.communicate()
-        return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
-    except Exception as e:
-        return -1, "", str(e)
-
-async def restart_bot(ctx, message_id, channel_id):
-    try:
-        update_config('restart_message_id', str(message_id))
-        update_config('restart_channel_id', str(channel_id))
-        await asyncio.sleep(3)
-        subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
-        await ctx.bot.close()
-    except Exception as e:
-        await ctx.edit_original_response(content=f"Error restarting the bot: {e}")
-
-@client.slash_command(description="Restart the bot.")
-@is_admin_or_user()
-async def restart(ctx):
-    try:
-        await ctx.response.defer()
-        message = await ctx.original_response()
-        await restart_bot(ctx, message.id, ctx.channel.id)
-    except Exception as e:
-        await ctx.edit_original_response(content=f"An error occurred while trying to restart the bot: {e}")
-
-@client.slash_command(description="Update the bot from the Git repository.")
-@is_admin_or_user()
-async def update(ctx, branch: str = "beta", restart: bool = False):
-    async def run_git_command(*cmd):
-        return await run_subprocess("git", *cmd)
-    try:
-        await ctx.response.defer()
-        returncode, current_branch, _ = await run_git_command("rev-parse", "--abbrev-ref", "HEAD")
-        if returncode != 0:
-            raise Exception("Failed to get current branch.")
-        if current_branch != branch:
-            returncode, _, stderr = await run_git_command("checkout", branch)
-            if returncode != 0:
-                raise Exception(f"Git checkout failed: {stderr}")
-        for cmd in [("stash",), ("pull", "origin", branch)]:
-            returncode, _, stderr = await run_git_command(*cmd)
-            if returncode != 0:
-                raise Exception(f"Git {cmd[0]} failed: {stderr}")
-        await ctx.edit_original_response(content='Update process completed.')
-        if restart:
-            await asyncio.sleep(0.5)
-            message = await ctx.original_response()
-            await restart_bot(ctx, message.id, ctx.channel.id)
-    except Exception as e:
-        await ctx.edit_original_response(content=f"Error updating the script: {e}")
-
-@client.slash_command(description="Shut down the bot.")
-@is_admin_or_user()
-async def shutdown(ctx):
-    buttons = [
-        disnake.ui.Button(label="Yes", style=disnake.ButtonStyle.success, custom_id="shutdown_yes"),
-        disnake.ui.Button(label="No", style=disnake.ButtonStyle.danger, custom_id="shutdown_no"),
-    ]
-    await ctx.response.send_message("Are you sure you want to shut down the bot?", components=buttons, ephemeral=True)
-
-@client.listen("on_button_click")
-@is_admin_or_user()
-async def shutdown_listener(inter):
-    if inter.component.custom_id == "shutdown_yes":
-        await inter.response.edit_message(content="Shutting down...", components=[])
-        await inter.bot.close()
-    elif inter.component.custom_id == "shutdown_no":
-        await inter.response.edit_message(content="Bot shutdown canceled.", components=[])
-
 def get_git_version():
     try:
         version = read_config().get('version', 'unknown-version')
@@ -149,6 +77,85 @@ def get_git_version():
     except subprocess.CalledProcessError:
         return "unknown-version"
 
+async def run_subprocess(*args):
+    try:
+        proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, stderr = await proc.communicate()
+        return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+    except Exception as e:
+        return -1, "", str(e)
+
+async def run_git_command(*cmd):
+    return await run_subprocess("git", *cmd)
+
+async def restart_bot(ctx):
+    try:
+        message = await ctx.original_response()
+        update_config('restart_message_id', str(message.id))
+        update_config('restart_channel_id', str(ctx.channel.id))
+        await ctx.edit_original_response(content="Restarting...")
+        await asyncio.sleep(1)
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
+        await client.close()
+    except Exception as e:
+        await ctx.edit_original_response(content=f"Error restarting the bot: {e}")
+        logging.error(f"Error restarting the bot: {e}")
+
+async def update_bot(ctx, branch: str):
+    try:
+        current_branch = await run_git_command("rev-parse", "--abbrev-ref", "HEAD")
+        if current_branch[0] != 0:
+            raise Exception("Failed to get current branch.")
+        if current_branch[1] != branch:
+            checkout_result = await run_git_command("checkout", branch)
+            if checkout_result[0] != 0:
+                raise Exception(f"Git checkout failed: {checkout_result[2]}")
+        stash_result = await run_git_command("stash")
+        if stash_result[0] != 0:
+            raise Exception(f"Git stash failed: {stash_result[2]}")
+        pull_result = await run_git_command("pull", "origin", branch)
+        if pull_result[0] != 0:
+            raise Exception(f"Git pull failed: {pull_result[2]}")
+        await ctx.edit_original_response(content='Update process completed.')
+    except Exception as e:
+        await ctx.edit_original_response(content=f"Error updating the bot: {e}")
+        logging.error(f"Error updating the bot: {e}")
+        raise
+
+@client.slash_command(description="Update and optionally restart the bot.")
+@is_admin_or_user()
+async def update(ctx, branch: str = "beta", restart: bool = False):
+    await ctx.response.defer()
+    try:
+        await update_bot(ctx, branch)
+        if restart:
+            await asyncio.sleep(0.5)
+            await restart_bot(ctx)
+    except Exception:
+        pass
+
+@client.slash_command(description="Restart the bot.")
+@is_admin_or_user()
+async def restart(ctx):
+    await ctx.response.defer()
+    await restart_bot(ctx)
+
+@client.slash_command(description="Shut down the bot.")
+@is_admin_or_user()
+async def shutdown(ctx):
+    class ShutdownView(disnake.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+        @disnake.ui.button(label="Yes", style=disnake.ButtonStyle.danger)
+        async def confirm(self, button: disnake.ui.Button, inter: disnake.MessageInteraction):
+            await inter.response.edit_message(content="Shutting down...", view=None)
+            logging.info("Bot shutdown initiated by user.")
+            await client.close()
+        @disnake.ui.button(label="No", style=disnake.ButtonStyle.secondary)
+        async def cancel(self, button: disnake.ui.Button, inter: disnake.MessageInteraction):
+            await inter.response.edit_message(content="Shutdown cancelled.", view=None)
+    await ctx.response.send_message("Are you sure you want to shut down the bot?", view=ShutdownView(), ephemeral=True)
+
 @client.event
 async def on_ready():
     await initialize_database()
@@ -157,23 +164,20 @@ async def on_ready():
     print(f'Logged in as {client.user.name}')
     try:
         config = read_config()
-        restart_channel_id = config.get('restart_channel_id', 0)
-        restart_message_id = config.get('restart_message_id', 0)
+        restart_channel_id = config.get('restart_channel_id')
+        restart_message_id = config.get('restart_message_id')
         if restart_channel_id and restart_message_id:
-            restart_channel_id = int(restart_channel_id)
-            restart_message_id = int(restart_message_id)
-            channel = client.get_channel(restart_channel_id)
+            channel = client.get_channel(int(restart_channel_id))
             if channel:
-                message = await channel.fetch_message(restart_message_id)
-                if message:
-                    await message.delete()
+                try:
+                    message = await channel.fetch_message(int(restart_message_id))
+                    await message.edit(content="I'm back online!")
+                except disnake.NotFound:
                     await channel.send("I'm back online!")
         update_config('restart_channel_id', '')
         update_config('restart_message_id', '')
-    except ValueError:
-        pass
     except Exception as e:
-        logging.error(f"Error sending restart message: {e}")
+        logging.error(f"Error in on_ready: {e}")
 
 if __name__ == "__main__":
     load_modules()

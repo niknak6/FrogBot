@@ -153,21 +153,25 @@ class EmojiCog(commands.Cog):
     async def handle_checkmark_reaction(self, payload: disnake.RawReactionActionEvent):
         guild = self.bot.get_guild(payload.guild_id)
         user = guild.get_member(payload.user_id)
-        role = guild.get_role(ROLE_ID)
-        if user.guild_permissions.administrator or user.id == ADMIN_USER_ID or role in user.roles:
+        authorized_role = guild.get_role(ROLE_ID)
+        if user.guild_permissions.administrator or user.id == ADMIN_USER_ID or authorized_role in user.roles:
             channel = self.bot.get_channel(payload.channel_id)
             if isinstance(channel, disnake.Thread):
                 message = await channel.fetch_message(payload.message_id)
                 embed = disnake.Embed(
-                    title="Resolve the Issue/Request",
-                    description="@here Has this issue or request been resolved? __Anyone__ can click **No** if it hasn't.\n",
+                    title="Issue/Request Resolution",
+                    description=(
+                        "@here, this issue/request has been marked as *resolved!*\n"
+                        "No further action is needed.\n"
+                        "This thread will be automatically deleted in *24 hours*."
+                    ),
                     color=disnake.Color.green()
                 )
-                embed.set_footer(text="This thread will close automatically in 24 hours unless 'No' is clicked.")
+                embed.set_footer(text="Please click 'Not Resolved' if this is incorrect.")
                 view = self.ResolutionView(message)
                 reply_message = await message.reply(embed=embed, view=view)
-                timestamp = int(time.time())
-                await log_checkmark_message_id(reply_message.id, channel.id, timestamp)
+                current_timestamp = int(time.time())
+                await log_checkmark_message_id(reply_message.id, channel.id, current_timestamp)
                 await view.start_countdown()
 
     async def handle_thumbsup_reaction(self, payload: disnake.RawReactionActionEvent):
@@ -200,7 +204,7 @@ class EmojiCog(commands.Cog):
             self.message = message
             self.countdown_task = None
             self.remaining_time = remaining_time or self.REMINDER_TIME * 2
-            no_button = Button(style=ButtonStyle.red, label="No")
+            no_button = Button(style=ButtonStyle.red, label="Not Resolved")
             no_button.callback = self.on_no_button_clicked
             self.add_item(no_button)
         
@@ -226,6 +230,7 @@ class EmojiCog(commands.Cog):
         async def on_no_button_clicked(self, interaction):
             if self.countdown_task:
                 self.countdown_task.cancel()
+            await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (interaction.message.id,))
             await interaction.message.edit(embed=self.create_followup_embed(), view=self.clear_items())
     
         def create_followup_embed(self):

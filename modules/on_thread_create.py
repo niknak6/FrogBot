@@ -28,14 +28,15 @@ class ThreadCreateCog(commands.Cog):
             super().__init__()
             self.message = message
             self.original_poster_id = original_poster_id
-            self.add_item(Button(style=disnake.ButtonStyle.green, label="Done!", callback=self.on_no_button_clicked))
+            self.add_item(Button(style=disnake.ButtonStyle.green, label="Done!", custom_id="done_button"))
 
-        async def on_no_button_clicked(self, interaction):
+        @disnake.ui.button(label="Done!", style=disnake.ButtonStyle.green, custom_id="done_button")
+        async def on_done_button(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
             if interaction.user.id != self.original_poster_id:
+                await interaction.response.send_message("Only the original poster can mark this as done.", ephemeral=True)
                 return
-            await self.message.edit(content='*The user has selected "done"*')
-            self.clear_items()
-            await self.message.edit(view=self)
+            await self.message.edit(content='*The user has selected "done"*', embed=None, view=None)
+            self.stop()
 
     async def handle_bug_report(self, thread):
         original_message = await thread.fetch_message(thread.id)
@@ -46,7 +47,7 @@ class ThreadCreateCog(commands.Cog):
                 "- Did you check for updates? Your bug may already be fixed!\n"
                 "- Are you on the “FrogPilot” or “FrogPilot-Staging” branch?\n"
                 "- Was there an error in the error log? You can find this in the “Software” panel!\n"
-                "- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in “Fleet Manager” in the “Tools” section!\n"
+                "- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in “Fleet Manager” in the “Tools” section!\n\n"
             ),
             color=disnake.Color.blue()
         )
