@@ -38,9 +38,18 @@ intents.guild_messages = True
 intents.reactions = True
 
 command_sync_flags = commands.CommandSyncFlags.default()
-command_sync_flags.sync_commands_debug = False
+command_sync_flags.sync_commands_debug = True
 
-client = commands.Bot(command_prefix='//||', intents=intents, command_sync_flags=command_sync_flags)
+client = commands.Bot(command_prefix='//||', intents=intents, command_sync_flags=command_sync_flags, test_guilds=[698205243103641711])
+
+def get_git_version():
+    try:
+        version = read_config().get('version', 'unknown-version')
+        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
+        return f"{version} {branch} {commit}"
+    except subprocess.CalledProcessError:
+        return "unknown-version"
 
 def load_module(file_path, name):
     try:
@@ -68,14 +77,18 @@ def load_modules():
                     file_path = os.path.join(root, file)
                     executor.submit(load_module, file_path, f"{Path(root).name}.{file[:-3]}")
 
-def get_git_version():
+@client.slash_command(name="reload_plugins", description="Reload all plugins")
+@is_admin_or_user()
+async def reload_plugins(ctx):
+    await ctx.response.defer(ephemeral=True)
     try:
-        version = read_config().get('version', 'unknown-version')
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
-        return f"{version} {branch} {commit}"
-    except subprocess.CalledProcessError:
-        return "unknown-version"
+        for cog in list(client.cogs):
+            client.remove_cog(cog)
+        load_modules()
+        await ctx.edit_original_response(content="All plugins have been reloaded successfully!")
+    except Exception as e:
+        logging.error(f"Error reloading plugins: {e}")
+        await ctx.edit_original_response(content=f"An error occurred while reloading plugins: {str(e)}")
 
 async def run_subprocess(*args):
     try:
@@ -124,10 +137,12 @@ async def update_bot(ctx, branch: str):
 
 @client.slash_command(description="Update and optionally restart the bot.")
 @is_admin_or_user()
-async def update(ctx, branch: str = "beta", restart: bool = False):
+async def update(ctx, branch: str = "beta", restart: bool = False, reload: bool = False):
     await ctx.response.defer()
     try:
         await update_bot(ctx, branch)
+        if reload:
+            await reload_plugins(ctx)
         if restart:
             await asyncio.sleep(0.5)
             await restart_bot(ctx)
