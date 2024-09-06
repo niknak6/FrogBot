@@ -44,17 +44,17 @@ class ThreadCreateCog(commands.Cog):
             title="Bug Report Assistance",
             description=(
                 "Greetings! It seems you're working on a bug report. To help you more effectively, could you please share the following details:\n\n"
-                "- Did you check for updates? Your bug may already be fixed!\n"
-                "- Are you on the “FrogPilot” or “FrogPilot-Staging” branch?\n"
-                "- Was there an error in the error log? You can find this in the “Software” panel!\n"
-                "- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in “Fleet Manager” in the “Tools” section!\n\n"
+                '- Did you check for updates? Your bug may already be fixed!\n'
+                '- Are you on the "FrogPilot" or "FrogPilot-Staging" branch?\n'
+                '- Was there an error in the error log? You can find this in the "Software" panel!\n'
+                '- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in "Fleet Manager" in the "Tools" section!\n\n'
             ),
             color=disnake.Color.blue()
         )
         embed.set_footer(text="If you need help with any of these steps, please let me know by replying to this message!")
-        message = await original_message.reply(embed=embed)
-        view = self.ConfirmationView(message, original_message.author.id)
-        await message.edit(view=view)
+        view = self.ConfirmationView(None, original_message.author.id)
+        message = await original_message.reply(embed=embed, view=view)
+        view.message = message
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
