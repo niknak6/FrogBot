@@ -1,11 +1,10 @@
 # modules.translate
 
-from disnake import Embed, Color, ApplicationCommandInteraction, Thread, TextInputStyle, ModalInteraction
+from disnake import Embed, Color, ApplicationCommandInteraction, Thread, TextInputStyle, ModalInteraction, MessageCommandInteraction
 from modules.utils.GPT import OpenAIAgent
 from typing import Optional, Set, Dict
 from disnake.ext import commands
 import disnake
-import asyncio
 import re
 
 TIMEOUT = 300
@@ -50,7 +49,11 @@ class TranslateCog(commands.Cog):
         else:
             await self.show_translate_modal(inter)
 
-    async def show_translate_modal(self, inter: ApplicationCommandInteraction):
+    @commands.message_command(name="Translate")
+    async def translate_message(self, inter: MessageCommandInteraction):
+        await self.show_translate_modal(inter, inter.target.content)
+
+    async def show_translate_modal(self, inter: ApplicationCommandInteraction, text_to_translate: str = ""):
         modal = disnake.ui.Modal(
             title="Translate Text",
             custom_id="translate_modal",
@@ -60,6 +63,7 @@ class TranslateCog(commands.Cog):
                     custom_id="text_to_translate",
                     style=TextInputStyle.paragraph,
                     max_length=1000,
+                    value=text_to_translate,
                 ),
                 disnake.ui.TextInput(
                     label="Target language",
@@ -89,7 +93,6 @@ class TranslateCog(commands.Cog):
         embed.add_field(name="📝 Original", value=f"```{original_text}```", inline=False)
         for lang, text in translations.items():
             embed.add_field(name=f"🔄 {lang}", value=f"```{text}```", inline=False)
-        
         if isinstance(message_or_inter, disnake.Message):
             author = message_or_inter.author
         else:
