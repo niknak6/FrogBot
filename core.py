@@ -1,4 +1,4 @@
-# core.py
+# core
 
 from modules.utils.database import initialize_database
 from modules.utils.commons import is_admin_or_user

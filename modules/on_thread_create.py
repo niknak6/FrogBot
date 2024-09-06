@@ -36,8 +36,8 @@ class ThreadCreateCog(commands.Cog):
             if interaction.user.id != self.original_poster_id:
                 return
             done_embed = disnake.Embed(
-                title="Bug Report Complete",
-                description="The user has indicated they added all the information they want to their bug report.",
+                title="Bug Report Information Added",
+                description="The user has indicated they added all the information requested to their bug report.",
                 color=disnake.Color.green()
             )
             await self.message.edit(embed=done_embed, view=None)
@@ -47,11 +47,11 @@ class ThreadCreateCog(commands.Cog):
         embed = disnake.Embed(
             title="Bug Report Assistance",
             description=(
-                "Greetings! It seems you're working on a bug report. To help you more effectively, could you please share the following details:\n\n"
+                "Greetings! It seems you're working on a bug report. To help you more effectively, could you please share the following details:\n"
                 '- Did you check for updates? Your bug may already be fixed!\n'
                 '- Are you on the "FrogPilot" or "FrogPilot-Staging" branch?\n'
                 '- Was there an error in the error log? You can find this in the "Software" panel!\n'
-                '- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in "Fleet Manager" in the "Tools" section!\n\n'
+                '- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in "Fleet Manager" in the "Tools" section!\n'
             ),
             color=disnake.Color.blue()
         )
