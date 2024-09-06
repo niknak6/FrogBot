@@ -72,7 +72,7 @@ def is_admin():
     async def predicate(ctx):
         author = ctx.user
         is_admin = author.guild_permissions.administrator
-        logging.error(f"Checking admin status for {author} (ID: {author.id}): {is_admin}")
+        logging.info(f"Checking admin status for {author} (ID: {author.id}): {is_admin}")
         return is_admin
     return commands.check(predicate)
 

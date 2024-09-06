@@ -36,13 +36,21 @@ async def calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds):
     user_rank = next((index for index, (u_id, _) in enumerate(sorted_users) if u_id == user.id), -1)
     return user_rank, next_rank_name, points_needed, current_threshold, next_threshold
 
-def create_progress_bar(current, total, length=10, fill_symbols='█▉▊▋▌▍▎▏', empty=' '):
+def create_progress_bar(current, total, length=10, fill_symbols='🟩🟨🟧🟥'):
     if total == 0:
         total = 1
-    progress = int(current / total * length * len(fill_symbols))
-    filled_count = progress // len(fill_symbols)
-    remainder_fill = progress % len(fill_symbols)
-    return (fill_symbols[0] * filled_count) + (fill_symbols[remainder_fill] if remainder_fill > 0 else '') + empty * (length - filled_count - 1)
+    progress = current / total
+    if progress == 0:
+        return f"[{'⬜' * length}] 0.0%"
+    filled_length = int(length * progress)
+    fraction = (length * progress) % 1
+    fractional_index = int(fraction * len(fill_symbols))
+    bar = fill_symbols[0] * filled_length
+    if filled_length < length:
+        bar += fill_symbols[fractional_index]
+        bar += '⬜' * (length - filled_length - 1)
+    percentage = f"{progress * 100:.1f}%"
+    return f"[{bar}] {percentage}"
 
 async def create_points_embed(ctx, user, current_points, role_thresholds, action, user_rank, next_rank_name, points_changed, reason=None):
     title = f"Points Added ⬆️: {points_changed}" if action == "add" else f"Points Removed ⬇️: {points_changed}"
@@ -55,11 +63,9 @@ async def create_points_embed(ctx, user, current_points, role_thresholds, action
     rank_text = f"**__{rank_emoji} | {user.display_name}: {current_points:,} points__**\nProgress: {progress_bar} ({points_needed:,} pts to {next_rank_name})"
     embed = disnake.Embed(
         title=title,
-        description=f"Here's the current standing of __*{user.display_name}*__.",
+        description=reason if reason else None,
         color=disnake.Color.green()
     )
     embed.add_field(name="\u200b", value=rank_text, inline=False)
-    if reason:
-        embed.add_field(name="Reason", value=reason, inline=False)
     embed.set_footer(text=f"Updated on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
     return embed

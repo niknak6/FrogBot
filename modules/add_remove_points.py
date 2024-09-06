@@ -23,7 +23,7 @@ class PointsCog(commands.Cog):
         await self.handle_points_command(ctx, points, user, "remove", reason)
 
     async def handle_points_command(self, ctx, points, user, action, reason):
-        logging.error(f"{action.capitalize()}ing points: Points: {points}, User: {user}")
+        logging.info(f"{action.capitalize()}ing points: Points: {points}, User: {user}")
         if points < 0:
             logging.error("Invalid points.")
             await ctx.send("Points must be a positive number.")

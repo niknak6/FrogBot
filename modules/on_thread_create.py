@@ -49,7 +49,7 @@ class ThreadCreateCog(commands.Cog):
             description=(
                 "Greetings! It seems you're working on a bug report. To help you more effectively, could you please share the following details:\n"
                 '- Did you check for updates? Your bug may already be fixed!\n'
-                '- Are you on the "FrogPilot" or "FrogPilot-Staging" branch?\n'
+                '- Which branch are you using? (e.g., FrogPilot, FrogPilot-Staging, or any other)\n'
                 '- Was there an error in the error log? You can find this in the "Software" panel!\n'
                 '- If you think it may be toggle related, post a copy of your toggles! You can find a copy of them in "Fleet Manager" in the "Tools" section!\n'
             ),
