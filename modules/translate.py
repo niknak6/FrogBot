@@ -145,5 +145,19 @@ class TranslateCog(commands.Cog):
     async def translate_error(self, inter, error):
         await inter.response.send_message(f"{'This command is on cooldown. Try again in {:.1f} seconds.'.format(error.retry_after) if isinstance(error, commands.CommandOnCooldown) else f'An error occurred: {error}'}", ephemeral=True)
 
+    async def list_active_languages(self, inter):
+        if not self.auto_translate_threads:
+            await inter.response.send_message("No active auto-translations at the moment.", ephemeral=True)
+            return
+
+        translations = []
+        for thread_id, (source_lang, target_lang) in self.auto_translate_threads.items():
+            thread = inter.guild.get_thread(thread_id)
+            thread_name = thread.name if thread else f"Unknown Thread ({thread_id})"
+            translations.append(f"• {thread_name}: {source_lang} → {target_lang}")
+
+        message = "Active auto-translations:\n" + "\n".join(translations)
+        await inter.response.send_message(message, ephemeral=True)
+
 def setup(client):
     client.add_cog(TranslateCog(client))
