@@ -148,6 +148,7 @@ async def update(ctx, branch: str = "beta", restart: bool = False, reload: bool 
     try:
         await update_bot(ctx, branch)
         if reload:
+            await asyncio.sleep(0.5)
             await reload_plugins(ctx)
         if restart:
             await asyncio.sleep(0.5)

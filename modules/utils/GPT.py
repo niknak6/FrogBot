@@ -16,7 +16,6 @@ import tiktoken
 import logging
 import disnake
 import asyncio
-import openai
 
 class HistoryChatMessage:
     def __init__(self, content, role, user_name=None):
@@ -73,8 +72,7 @@ async def fetch_reply_chain(message, max_tokens=8192):
         await process_reply_chain(message)
     return context[::-1]
 
-openai.api_key = read_config().get('OPENAI_API_KEY')
-Settings.llm = OpenAI(model='gpt-4o-mini', max_tokens=1000)
+Settings.llm = OpenAI(model='gpt-4o-mini', max_tokens=1000, api_key=read_config().get('OPENAI_API_KEY'))
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
 
 search_spec = DuckDuckGoSearchToolSpec()
