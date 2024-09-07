@@ -26,6 +26,7 @@ class TranslateCog(commands.Cog):
         name="translate",
         description="Translate messages or manage auto-translation settings",
     )
+    
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def translate(
         self,
@@ -51,35 +52,43 @@ class TranslateCog(commands.Cog):
 
     @commands.message_command(name="Translate")
     async def translate_message(self, inter: MessageCommandInteraction):
-        await self.show_translate_modal(inter, inter.target.content)
+        await self.show_translate_modal(inter, inter.target.content, message_command=True)
 
-    async def show_translate_modal(self, inter: ApplicationCommandInteraction, text_to_translate: str = ""):
+    async def show_translate_modal(self, inter: ApplicationCommandInteraction, text_to_translate: str = "", message_command: bool = False):
+        components = [
+            disnake.ui.TextInput(
+                label="Target language",
+                custom_id="target_language",
+                style=TextInputStyle.short,
+                max_length=50,
+            ),
+        ]
+        modal_custom_id = f"translate_modal{'_message' if message_command else ''}"
+        if message_command:
+            modal_custom_id += f":{text_to_translate}"
+        else:
+            components.insert(0, disnake.ui.TextInput(
+                label="Text to translate",
+                custom_id="text_to_translate",
+                style=TextInputStyle.paragraph,
+                max_length=1000,
+                value=text_to_translate,
+            ))
         modal = disnake.ui.Modal(
             title="Translate Text",
-            custom_id="translate_modal",
-            components=[
-                disnake.ui.TextInput(
-                    label="Text to translate",
-                    custom_id="text_to_translate",
-                    style=TextInputStyle.paragraph,
-                    max_length=1000,
-                    value=text_to_translate,
-                ),
-                disnake.ui.TextInput(
-                    label="Target language",
-                    custom_id="target_language",
-                    style=TextInputStyle.short,
-                    max_length=50,
-                ),
-            ],
+            custom_id=modal_custom_id,
+            components=components,
         )
         await inter.response.send_modal(modal)
 
     @commands.Cog.listener("on_modal_submit")
     async def on_translate_modal_submit(self, inter: ModalInteraction):
-        if inter.custom_id == "translate_modal":
-            text_to_translate = inter.text_values["text_to_translate"]
+        if inter.custom_id.startswith("translate_modal"):
             target_language = inter.text_values["target_language"]
+            if inter.custom_id.startswith("translate_modal_message"):
+                text_to_translate = inter.custom_id.split(":", 1)[1]
+            else:
+                text_to_translate = inter.text_values.get("text_to_translate")
             translated_text = await self.translate_text(text_to_translate, target_language)
             if translated_text:
                 translations = {target_language: translated_text}
