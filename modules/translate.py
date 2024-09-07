@@ -151,11 +151,22 @@ class TranslateCog(commands.Cog):
         if message.author.bot or not isinstance(message.channel, Thread):
             return
         if message.channel.id in self.auto_translate_threads:
-            source_text = self.replace_mentions(message, message.content)
-            translations = await self.translate_to_multiple_languages(source_text, self.auto_translate_threads[message.channel.id])
-            if translations:
-                embed = self.create_auto_translation_embed(message, translations)
-                await message.reply(embed=embed)
+            filtered_content = self.filter_content(message.content)
+            if filtered_content:
+                source_text = self.replace_mentions(message, filtered_content)
+                translations = await self.translate_to_multiple_languages(source_text, self.auto_translate_threads[message.channel.id])
+                if translations:
+                    embed = self.create_auto_translation_embed(message, translations)
+                    await message.reply(embed=embed)
+
+    def filter_content(self, content):
+        url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+        content = re.sub(url_pattern, '', content)
+        image_pattern = r'attachment://\S+\.(?:jpg|jpeg|png|gif|webp)'
+        content = re.sub(image_pattern, '', content)
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        filtered_content = '\n'.join(lines)
+        return filtered_content.strip()
 
     async def translate_to_multiple_languages(self, text, target_languages):
         translations = {}
