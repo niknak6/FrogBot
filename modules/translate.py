@@ -14,7 +14,7 @@ class TranslateCog(commands.Cog):
         self.client = client
         self.chat_engine = OpenAIAgent.from_tools(
             [],
-            system_prompt="You are a translator. Translate the following message to the specified language. If the source language is not specified, detect it automatically. Provide only the translated text without any additional explanations.",
+            system_prompt="Translate the following message to the specified language. If source language not specified, detect it. Provide only the translated text.",
             verbose=False
         )
         self.auto_translate_threads: Dict[int, Set[str]] = {}
@@ -114,7 +114,7 @@ class TranslateCog(commands.Cog):
         return {lang: await self.translate_text(text, lang, source_lang) for lang in target_languages if lang.lower() != source_lang.lower()}
 
     async def detect_language(self, text):
-        response = self.chat_engine.chat(f"Detect the language of the following text and respond with only the language name in English: {text}")
+        response = self.chat_engine.chat(f"Detect language. Respond with language name in English: {text[:100]}")
         return response.response.strip().lower() if response and response.response else "unknown"
 
     async def translate_text(self, message, target_lang, source_lang=None):
