@@ -19,15 +19,21 @@
 - **🕰️ Old:** This is the first revision of the bot; there are a few broken things with it, and we wouldn't recommend using it.
 
 ## 🚀 Current Features
-- Drag and Dop-in Cogs
-- Automatic role assignment based on points
-- Points assignment and removal
-- Points tracking
-- Add points via reactions
-- Updating via commands
-- AI LLM and RAG integration via Llama Index
-- Reply context chain for the LLM; you can simply reply to the bot's message to continue the conversation
-- Web search for specific sites
+- Points system with user ranks and roles
+- Automatic role assignment based on user points
+- Reaction-based point awarding system
+- Tic-Tac-Toe game
+- Whiteboard functionality for admins
+- Help command with different categories (General, Points, Advanced)
+- Bot update and restart commands for admins
+- Automatic thread management for bug reports and feature requests
+- AI-powered chat assistant using GPT models
+- Custom emoji reactions and responses
+- Welcome messages for new members
+- Translation feature for messages
+- User-specific language preferences in threads
+- Database management for user points and other data
+- Various utility functions for admins (e.g., shutdown, reload plugins)
 
 ## 💬 Usage Examples
 - To add points to a user: `/add points user`
