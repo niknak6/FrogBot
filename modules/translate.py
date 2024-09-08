@@ -3,6 +3,7 @@
 from disnake import Embed, Color, ApplicationCommandInteraction, Thread, TextInputStyle, ModalInteraction, MessageCommandInteraction
 from modules.utils.GPT import OpenAIAgent
 from typing import Optional, Set, Dict
+from collections import defaultdict
 from disnake.ext import commands
 import disnake
 import re
@@ -19,6 +20,7 @@ class TranslateCog(commands.Cog):
         )
         self.auto_translate_threads: Dict[int, Set[str]] = {}
         self.user_language_preferences: Dict[int, str] = {}
+        self.message_cache = defaultdict(dict)
 
     @commands.slash_command(name="translate", description="Translate messages or manage auto-translation settings")
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -53,10 +55,11 @@ class TranslateCog(commands.Cog):
         components = [
             disnake.ui.TextInput(label="Target language", custom_id="target_language", style=TextInputStyle.short, max_length=50),
         ]
-        modal_custom_id = f"translate_modal{'_message' if message_command else ''}"
         if message_command:
-            modal_custom_id += f":{text_to_translate}"
+            modal_custom_id = f"translate_modal_message:{inter.id}"
+            self.message_cache[inter.author.id][inter.id] = text_to_translate
         else:
+            modal_custom_id = "translate_modal"
             components.insert(0, disnake.ui.TextInput(label="Text to translate", custom_id="text_to_translate", style=TextInputStyle.paragraph, max_length=1000, value=text_to_translate))
         await inter.response.send_modal(disnake.ui.Modal(title="Translate Text", custom_id=modal_custom_id, components=components))
 
@@ -64,7 +67,14 @@ class TranslateCog(commands.Cog):
     async def on_translate_modal_submit(self, inter: ModalInteraction):
         if inter.custom_id.startswith("translate_modal"):
             target_language = inter.text_values["target_language"]
-            text_to_translate = inter.custom_id.split(":", 1)[1] if inter.custom_id.startswith("translate_modal_message") else inter.text_values.get("text_to_translate")
+            if inter.custom_id.startswith("translate_modal_message"):
+                interaction_id = int(inter.custom_id.split(":")[1])
+                text_to_translate = self.message_cache[inter.author.id].pop(interaction_id, None)
+                if text_to_translate is None:
+                    await inter.response.send_message("Sorry, the message to translate couldn't be found. Please try again.", ephemeral=True)
+                    return
+            else:
+                text_to_translate = inter.text_values.get("text_to_translate")
             translated_text = await self.translate_text(text_to_translate, target_language)
             if translated_text:
                 embed = self.create_translation_embed(inter, text_to_translate, {target_language: translated_text})
