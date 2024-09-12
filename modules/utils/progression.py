@@ -1,6 +1,6 @@
 # modules.utils.progression
 
-from modules.utils.database import initialize_points_database, get_user_points
+from modules.utils.database import initialize_points_database, get_user_points, db_access_with_retry
 from bisect import bisect_right
 import datetime
 import disnake
@@ -31,10 +31,14 @@ async def calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds):
     next_rank_role = ctx.guild.get_role(next_role_id) if next_role_id else None
     next_rank_name = next_rank_role.name if next_rank_role else "Next Rank"
     points_needed = next_threshold - current_points if next_role_id else 0
-    user_points = await get_user_points(user.id)
-    sorted_users = sorted(user_points.items(), key=lambda x: x[1], reverse=True) if isinstance(user_points, dict) else []
+    all_user_points = await get_all_users_points()
+    sorted_users = sorted(all_user_points.items(), key=lambda x: x[1], reverse=True)
     user_rank = next((index for index, (u_id, _) in enumerate(sorted_users) if u_id == user.id), -1)
     return user_rank, next_rank_name, points_needed, current_threshold, next_threshold
+
+async def get_all_users_points():
+    rows = await db_access_with_retry('SELECT user_id, points FROM user_points')
+    return {user_id: points for user_id, points in rows}
 
 def create_progress_bar(current, total, length=10, fill_symbols='🟩🟨🟧🟥'):
     if total == 0:
