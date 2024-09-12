@@ -34,7 +34,7 @@ class PointsCog(commands.Cog):
         if await update_points(user.id, new_points):
             await check_user_points(self.bot)
         user_rank, next_rank_name, _, _, _ = await calculate_user_rank_and_next_rank_name(ctx, user, role_thresholds)
-        new_embed = await create_points_embed(ctx, user, new_points, role_thresholds, action, user_rank, next_rank_name, points, reason)
+        new_embed = await create_points_embed(ctx, user, new_points, role_thresholds, action, user_rank, next_rank_name, points, f"Reason: {reason}" if reason else None)
         await ctx.send(embed=new_embed)
 
 def setup(bot):

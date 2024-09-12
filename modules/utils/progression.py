@@ -59,8 +59,8 @@ async def create_points_embed(ctx, user, current_points, role_thresholds, action
     progress_current = current_points - current_threshold
     progress_bar = create_progress_bar(progress_current, progress_length)
     rank_emojis = ["🥇", "🥈", "🥉"]
-    rank_emoji = rank_emojis[user_rank] if user_rank < 3 else f"#{user_rank + 1}"
-    rank_text = f"**__{rank_emoji} | {user.display_name}: {current_points:,} points__**\nProgress: {progress_bar} ({points_needed:,} pts to {next_rank_name})"
+    rank_display = rank_emojis[user_rank] if user_rank < 3 else f"#{user_rank + 1}"
+    rank_text = f"**__{rank_display} | {user.display_name}: {current_points:,} points__**\nProgress: {progress_bar} ({points_needed:,} pts to {next_rank_name})"
     embed = disnake.Embed(
         title=title,
         description=reason if reason else None,
