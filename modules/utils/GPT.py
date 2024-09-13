@@ -30,6 +30,7 @@ async def fetch_reply_chain(message, max_tokens=8192):
     tokens_used = 0
     remaining_tokens = max_tokens - count_tokens(message.content)
     processed_message_ids = set()
+
     async def process_message(msg):
         nonlocal tokens_used
         if msg.id in processed_message_ids or tokens_used >= remaining_tokens:
@@ -42,19 +43,22 @@ async def fetch_reply_chain(message, max_tokens=8192):
         context.append(HistoryChatMessage(msg.content, role, msg.author.name))
         tokens_used += message_tokens
         return True
+
     async def process_thread(thread):
         try:
+            messages = [msg async for msg in thread.history(limit=None, oldest_first=False)]
             thread_starter = await thread.parent.fetch_message(thread.id)
-            messages = [thread_starter] + [msg async for msg in thread.history(limit=None, oldest_first=False)]
-            for msg in reversed(messages):
+            messages.append(thread_starter)
+            for msg in messages:
                 if not await process_message(msg):
                     break
         except Exception as e:
             logging.error(f"Error processing thread: {e}")
+
     async def process_reply_chain(msg):
-        messages = []
+        chain = []
         while msg and tokens_used < remaining_tokens:
-            messages.append(msg)
+            chain.append(msg)
             if msg.reference:
                 try:
                     msg = await msg.channel.fetch_message(msg.reference.message_id)
@@ -63,14 +67,15 @@ async def fetch_reply_chain(message, max_tokens=8192):
                     break
             else:
                 break
-        for msg in reversed(messages):
+        for msg in chain:
             if not await process_message(msg):
                 break
+
     if isinstance(message.channel, disnake.Thread):
         await process_thread(message.channel)
     else:
         await process_reply_chain(message)
-    return context[::-1]
+    return list(reversed(context))
 
 Settings.llm = OpenAI(model='gpt-4o-mini', max_tokens=1000, api_key=read_config().get('OPENAI_API_KEY'))
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
