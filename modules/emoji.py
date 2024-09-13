@@ -119,19 +119,21 @@ class EmojiCog(commands.Cog):
                 reply_info['reasons'].remove(reason_tuple)
             reply_info['total_points'] -= EMOJI_POINTS[emoji]
         embed = self.create_points_embed(message.author, reply_info['total_points'], reply_info['reasons'])
-        await self.edit_or_create_reply(message, reply_info, embed)
-
-    async def edit_or_create_reply(self, message: disnake.Message, reply_info: Dict, embed: Embed):
-        channel = message.channel
-        if reply_info['reply_id']:
-            try:
-                reply_message = await channel.fetch_message(reply_info['reply_id'])
-                await reply_message.edit(embed=embed)
-            except disnake.NotFound:
-                reply_info['reply_id'] = None
-        if not reply_info['reply_id']:
-            reply_message = await message.reply(embed=embed)
-            reply_info['reply_id'] = reply_message.id
+        existing_reply = None
+        async for msg in message.channel.history(limit=10, after=message):
+            if (msg.author == self.bot.user and 
+                msg.reference and 
+                msg.reference.message_id == message.id and
+                msg.embeds and 
+                msg.embeds[0].title == "Points Updated"):
+                existing_reply = msg
+                break
+        if existing_reply:
+            await existing_reply.edit(embed=embed)
+            reply_info['reply_id'] = existing_reply.id
+        else:
+            new_reply = await message.reply(embed=embed)
+            reply_info['reply_id'] = new_reply.id
         self.bot_replies[message.id] = reply_info
 
     async def get_user_points(self, user_id: int) -> int:
@@ -140,7 +142,7 @@ class EmojiCog(commands.Cog):
 
     def create_points_embed(self, user: disnake.User, total_points: int, reasons: List[tuple]) -> Embed:
         embed = disnake.Embed(
-            title="Points Update",
+            title="Points Updated",
             description=f"{user.display_name} has been awarded points for:",
             color=disnake.Color.green()
         )
