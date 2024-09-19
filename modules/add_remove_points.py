@@ -3,7 +3,6 @@
 from modules.utils.progression import calculate_user_rank_and_next_rank_name, create_points_embed, role_thresholds
 from modules.utils.database import initialize_points_database, update_points, get_user_points
 from modules.roles import check_user_points
-from modules.utils.commons import is_admin
 from disnake.ext import commands
 from disnake import User
 import logging
@@ -13,12 +12,12 @@ class PointsCog(commands.Cog):
         self.bot = bot
 
     @commands.slash_command(description="Add points to a user")
-    @is_admin()
+    @commands.has_permissions(administrator=True)
     async def add(self, ctx, points: int, user: User, reason: str = None):
         await self.handle_points_command(ctx, points, user, "add", reason)
 
     @commands.slash_command(description="Remove points from a user")
-    @is_admin()
+    @commands.has_permissions(administrator=True)
     async def remove(self, ctx, points: int, user: User, reason: str = None):
         await self.handle_points_command(ctx, points, user, "remove", reason)
 

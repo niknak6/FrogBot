@@ -1,9 +1,7 @@
 # core
 
-from modules.utils.database import initialize_database
-from modules.utils.commons import is_admin_or_user
+from modules.utils.commons import is_admin_or_privileged
 from concurrent.futures import ThreadPoolExecutor
-from modules.roles import check_user_points
 from disnake.ext import commands
 from pathlib import Path
 import importlib.util
@@ -123,7 +121,7 @@ async def update_bot(ctx, branch: str):
         raise
 
 @client.slash_command(description="Update and optionally restart the bot.")
-@is_admin_or_user()
+@is_admin_or_privileged(user_id=126123710435295232)
 async def update(ctx, branch: str = "beta", restart: bool = False, reload: bool = False):
     await ctx.response.defer(ephemeral=True)
     message = await ctx.original_response()
@@ -144,7 +142,7 @@ async def update(ctx, branch: str = "beta", restart: bool = False, reload: bool 
         logging.error(f"Error during update process: {e}")
 
 @client.slash_command(name="reload_plugins", description="Reload all plugins")
-@is_admin_or_user()
+@is_admin_or_privileged(user_id=126123710435295232)
 async def reload_plugins(ctx, message=None):
     if not message:
         await ctx.response.defer(ephemeral=True)
@@ -164,13 +162,13 @@ async def reload_plugins(ctx, message=None):
         await message.edit(content=f"An error occurred while reloading plugins: {str(e)}")
 
 @client.slash_command(description="Restart the bot.")
-@is_admin_or_user()
+@is_admin_or_privileged(user_id=126123710435295232)
 async def restart(ctx):
     await ctx.response.defer()
     await restart_bot(ctx)
 
 @client.slash_command(description="Shut down the bot.")
-@is_admin_or_user()
+@is_admin_or_privileged(user_id=126123710435295232)
 async def shutdown(ctx):
     class ShutdownView(disnake.ui.View):
         def __init__(self):
@@ -187,8 +185,6 @@ async def shutdown(ctx):
 
 @client.event
 async def on_ready():
-    await initialize_database()
-    await check_user_points(client)
     await client.change_presence(activity=disnake.Game(name=f"/help | {get_git_version()}"))
     print(f'Logged in as {client.user.name}')
     try:

@@ -52,7 +52,6 @@ async def send_long_message(message, response, should_reply=True):
                 last_message = await send_message(message, part, should_reply)
             else:
                 last_message = await send_message(last_message, part, False)
-            
             if last_message is None:
                 break
             messages.append(last_message)
@@ -61,24 +60,13 @@ async def send_long_message(message, response, should_reply=True):
         logging.error(f"Error in send_long_message: {e}")
         return None
 
-def is_admin():
+def is_admin_or_privileged(user_id=None, rank_id=None):
     async def predicate(ctx):
-        author = ctx.user
-        is_admin = author.guild_permissions.administrator
-        logging.info(f"Checking admin status for {author} (ID: {author.id}): {is_admin}")
-        return is_admin
-    return commands.check(predicate)
-
-def is_admin_or_user(user_id=126123710435295232):
-    async def predicate(ctx):
-        is_admin = ctx.author.guild_permissions.administrator
-        is_specific_user = ctx.author.id == user_id
-        return is_admin or is_specific_user
-    return commands.check(predicate)
-
-def is_admin_or_rank(rank_id=1198482895342411846):
-    async def predicate(ctx):
-        is_admin = ctx.author.guild_permissions.administrator
-        has_rank = any(role.id == rank_id for role in ctx.author.roles)
-        return is_admin or has_rank
+        if ctx.author.guild_permissions.administrator:
+            return True
+        elif user_id and ctx.author.id == user_id:
+            return True
+        elif rank_id and any(role.id == rank_id for role in ctx.author.roles):
+            return True
+        return False
     return commands.check(predicate)

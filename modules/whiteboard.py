@@ -1,7 +1,7 @@
 # modules.whiteboard
 
 from disnake import TextInputStyle, ui, ApplicationCommandInteraction, NotFound, Forbidden
-from modules.utils.commons import is_admin_or_rank
+from modules.utils.commons import is_admin_or_privileged
 from disnake.ext import commands
 import asyncio
 
@@ -13,7 +13,7 @@ class WhiteboardCog(commands.Cog):
         self.client = client
 
     @commands.slash_command()
-    @is_admin_or_rank()
+    @is_admin_or_privileged(rank_id=1198482895342411846)
     async def whiteboard(self, inter: ApplicationCommandInteraction):
         await inter.response.send_modal(
             title="Whiteboard",

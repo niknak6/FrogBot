@@ -37,6 +37,9 @@ class EmojiCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.bot_replies: Dict[int, Dict] = {}
+        self.reaction_lock = asyncio.Lock()
+        self.max_retries = 3
+        self.retry_delay = 1
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -81,10 +84,23 @@ class EmojiCog(commands.Cog):
         if payload.guild_id is None:
             return
         emoji_name = str(payload.emoji)
-        if emoji_name in EMOJI_POINTS:
-            await self.process_emoji_points(payload, is_add)
-        elif emoji_name in EMOJI_ACTIONS and is_add:
-            await getattr(self, EMOJI_ACTIONS[emoji_name])(payload)
+        async with self.reaction_lock:
+            for _ in range(self.max_retries):
+                try:
+                    if emoji_name in EMOJI_POINTS:
+                        await self.process_emoji_points(payload, is_add)
+                    elif emoji_name in EMOJI_ACTIONS and is_add:
+                        await getattr(self, EMOJI_ACTIONS[emoji_name])(payload)
+                    break
+                except disnake.errors.HTTPException as e:
+                    if e.code == 429:
+                        await asyncio.sleep(self.retry_delay)
+                    else:
+                        logging.error(f"HTTP error processing reaction: {e}")
+                        break
+                except Exception as e:
+                    logging.error(f"Error processing reaction: {e}")
+                    break
 
     async def process_emoji_points(self, payload: RawReactionActionEvent, is_add: bool):
         guild = self.bot.get_guild(payload.guild_id)
@@ -114,20 +130,26 @@ class EmojiCog(commands.Cog):
         if is_add:
             if reason_tuple not in reply_info['reasons']:
                 reply_info['reasons'].append(reason_tuple)
-            reply_info['total_points'] += EMOJI_POINTS[emoji]
+                reply_info['total_points'] += EMOJI_POINTS[emoji]
         else:
             if reason_tuple in reply_info['reasons']:
                 reply_info['reasons'].remove(reason_tuple)
-            reply_info['total_points'] -= EMOJI_POINTS[emoji]
+                reply_info['total_points'] -= EMOJI_POINTS[emoji]
         embed = self.create_points_embed(message.author, reply_info['total_points'], reply_info['reasons'])
-        existing_reply = await self.find_existing_reply(message)
-        if existing_reply:
-            await existing_reply.edit(embed=embed)
-            reply_info['reply_id'] = existing_reply.id
-        else:
+        try:
+            if reply_info['reply_id']:
+                existing_reply = await message.channel.fetch_message(reply_info['reply_id'])
+                await existing_reply.edit(embed=embed)
+            else:
+                new_reply = await message.reply(embed=embed)
+                reply_info['reply_id'] = new_reply.id
+            self.bot_replies[message.id] = reply_info
+        except disnake.errors.NotFound:
             new_reply = await message.reply(embed=embed)
             reply_info['reply_id'] = new_reply.id
-        self.bot_replies[message.id] = reply_info
+            self.bot_replies[message.id] = reply_info
+        except Exception as e:
+            logging.error(f"Error updating bot reply: {e}")
 
     async def find_existing_reply(self, message: Message) -> Message | None:
         async for msg in message.channel.history(limit=10, after=message):

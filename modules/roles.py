@@ -2,6 +2,7 @@
 
 from modules.utils.database import db_access_with_retry
 from modules.utils.progression import role_thresholds
+from disnake.ext import commands
 import logging
 import disnake
 
@@ -51,3 +52,14 @@ async def check_user_points(client):
             logging.error(f"Bot doesn't have permission to manage roles for {member}")
         except disnake.HTTPException as e:
             logging.error(f"HTTP request failed: {e}")
+
+class RolesCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+    @commands.Cog.listener()
+    async def on_ready(self):
+        await check_user_points(self.bot)
+        logging.debug("User points checked and roles updated.")
+
+def setup(bot):
+    bot.add_cog(RolesCog(bot))

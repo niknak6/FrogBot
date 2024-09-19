@@ -1,5 +1,6 @@
 # modules.utils.database
 
+from disnake.ext import commands
 import aiosqlite
 import asyncio
 import logging
@@ -73,3 +74,14 @@ async def log_checkmark_message_id(message_id, channel_id, timestamp):
     except Exception as e:
         logging.error(f"Failed to log checkmark message ID: {e}")
         return False
+
+class DatabaseCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+    @commands.Cog.listener()
+    async def on_ready(self):
+        await initialize_database()
+        logging.debug("Database initialized.")
+
+def setup(bot):
+    bot.add_cog(DatabaseCog(bot))
