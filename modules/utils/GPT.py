@@ -185,8 +185,11 @@ class OpenPilotAssistant(commands.Cog):
     async def on_message(self, message):
         if message.author.bot:
             return
-        if any(embed.title in ["🌐 Auto-Translations", "🌐 Translation"] for embed in message.embeds):
-            return
+        if any(embed.title in ["🌐 Auto-Translations", "🌐 Translation"] for embed in message.embeds) or \
+           (message.reference and message.channel.id == message.reference.channel_id):
+            referenced_message = await message.channel.fetch_message(message.reference.message_id)
+            if any(embed.title in ["🌐 Auto-Translations", "🌐 Translation"] for embed in referenced_message.embeds):
+                return
         if self.client.user in message.mentions:
             await process_message_with_llm(message, self.client)
         else:
