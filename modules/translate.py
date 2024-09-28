@@ -24,13 +24,17 @@ class TranslateCog(commands.Cog):
 
     @commands.slash_command(name="translate", description="Translate messages or manage auto-translation settings")
     @commands.cooldown(1, 5, commands.BucketType.user)
-    async def translate(self, inter: ApplicationCommandInteraction, auto: Optional[str] = commands.Param(default=None, choices=["on", "off"], description="Turn auto-translation on/off"),
+    async def translate(self, inter: ApplicationCommandInteraction, 
+                        auto: Optional[str] = commands.Param(default=None, choices=["on", "off"], description="Turn auto-translation on/off"),
                         set_language: Optional[str] = commands.Param(default=None, description="Set your preferred language"),
+                        remove_languages: Optional[str] = commands.Param(default=None, description="Remove language(s) from auto-translate (comma-separated)"),
                         status: Optional[bool] = commands.Param(default=None, description="Show translation status")):
         if auto:
             await self.handle_auto_translate(inter, auto)
         elif set_language:
             await self.set_user_language(inter, set_language)
+        elif remove_languages:
+            await self.remove_languages(inter, remove_languages)
         elif status:
             await self.show_translation_status(inter)
         else:
@@ -149,6 +153,33 @@ class TranslateCog(commands.Cog):
     @translate.error
     async def translate_error(self, inter, error):
         await inter.response.send_message(f"{'This command is on cooldown. Try again in {:.1f} seconds.'.format(error.retry_after) if isinstance(error, commands.CommandOnCooldown) else f'An error occurred: {error}'}", ephemeral=True)
+
+    async def remove_languages(self, inter, languages_to_remove):
+        if not isinstance(inter.channel, Thread) or inter.channel.id not in self.auto_translate_threads:
+            await inter.response.send_message("You can only remove languages in threads with auto-translation enabled.", ephemeral=True)
+            return
+        languages = [lang.strip().lower() for lang in languages_to_remove.split(',')]
+        thread_languages = self.auto_translate_threads[inter.channel.id]
+        removed = []
+        not_found = []
+        thread_languages_lower = {lang.lower() for lang in thread_languages}
+        for lang in languages:
+            if lang in thread_languages_lower:
+                # Find the original case version and remove it
+                original_lang = next(l for l in thread_languages if l.lower() == lang)
+                thread_languages.remove(original_lang)
+                removed.append(original_lang)
+            else:
+                not_found.append(lang)
+        response = []
+        if removed:
+            response.append(f"Removed language(s): {', '.join(removed)}")
+        if not_found:
+            response.append(f"Language(s) not found: {', '.join(not_found)}")
+        await inter.response.send_message('\n'.join(response), ephemeral=True)
+        for user_id, pref_lang in list(self.user_language_preferences.items()):
+            if pref_lang.lower() in [lang.lower() for lang in removed]:
+                del self.user_language_preferences[user_id]
 
 def setup(client):
     client.add_cog(TranslateCog(client))
