@@ -8,8 +8,8 @@ services:
     container_name: frogbot
     volumes:
       - .:/app
-      - user_points_data:/app/user_points.db
-      - config_data:/app/config.yaml
+      - ./user_points.db:/app/user_points.db
+      - ./config.yaml:/app/config.yaml
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     working_dir: /app
     environment:
@@ -22,8 +22,8 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - user_points_data:/app/user_points.db
-      - config_data:/app/config.yaml
+      - ./user_points.db:/app/user_points.db
+      - ./config.yaml:/app/config.yaml
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     command: /usr/sbin/cron -f -L 15
     depends_on:
