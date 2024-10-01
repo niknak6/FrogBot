@@ -12,3 +12,4 @@ llama-index-readers-github
 aiosqlite
 openai
 psutil
+git
