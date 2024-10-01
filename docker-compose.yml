@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: frogbot
     volumes:
-      - ./FrogBot:/app
+      - .:/app
       - user_points_data:/app/user_points.db
       - config_data:/app/config.yaml
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro

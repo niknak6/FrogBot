@@ -10,8 +10,8 @@ RUN apt-get update && \
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the FrogBot directory to /app in the container
-COPY FrogBot /app
+# Copy the contents of the FrogBot directory to /app in the container
+COPY . /app
 
 # Install Python dependencies
 RUN pip install -r requirements.txt
@@ -20,7 +20,7 @@ RUN pip install -r requirements.txt
 RUN chmod +x backup_script.sh
 
 # Copy the crontab file to the appropriate location
-COPY FrogBot/crontab /etc/cron.d/backup-cron
+COPY crontab /etc/cron.d/backup-cron
 
 # Set the correct permissions for the crontab file
 RUN chmod 0644 /etc/cron.d/backup-cron
