@@ -7,14 +7,14 @@ services:
       dockerfile: Dockerfile
     container_name: frogbot
     volumes:
-      - .:/app
-      - user_points_data:/app/FrogBot/user_points.db
-      - config_data:/app/FrogBot/config.yaml
+      - ./FrogBot:/app
+      - user_points_data:/app/user_points.db
+      - config_data:/app/config.yaml
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     working_dir: /app
     environment:
       - PYTHONUNBUFFERED=1
-    command: python FrogBot/core.py
+    command: python core.py
     restart: unless-stopped
 
   backup:
@@ -22,8 +22,8 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - user_points_data:/app/FrogBot/user_points.db
-      - config_data:/app/FrogBot/config.yaml
+      - user_points_data:/app/user_points.db
+      - config_data:/app/config.yaml
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     command: /usr/sbin/cron -f -L 15
     depends_on:
