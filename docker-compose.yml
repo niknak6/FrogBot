@@ -10,6 +10,7 @@ services:
       - .:/app
       - user_points_data:/app/FrogBot/user_points.db
       - config_data:/app/FrogBot/config.yaml
+      - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     working_dir: /app
     environment:
       - PYTHONUNBUFFERED=1
@@ -23,7 +24,7 @@ services:
     volumes:
       - user_points_data:/app/FrogBot/user_points.db
       - config_data:/app/FrogBot/config.yaml
-      - ./rclone.conf:/root/.config/rclone/rclone.conf:ro
+      - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     command: crond -f -d 8
     depends_on:
       - frogbot
