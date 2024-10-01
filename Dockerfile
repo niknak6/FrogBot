@@ -7,19 +7,16 @@ RUN apt-get update && apt-get install -y rclone cron && apt-get clean
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-# Copy the rest of the application code
+# Copy all files from the current directory to /app in the container
 COPY . .
 
-# Copy the backup script
-COPY backup_script.sh /app/backup_script.sh
-RUN chmod +x /app/backup_script.sh
+# Install Python dependencies
+RUN pip install -r requirements.txt
+
+# Make the backup script executable
+RUN chmod +x backup_script.sh
 
 # Set up cron job
-COPY crontab /etc/cron.d/backup-cron
 RUN chmod 0644 /etc/cron.d/backup-cron
 RUN crontab /etc/cron.d/backup-cron
 
