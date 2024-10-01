@@ -13,8 +13,9 @@ WORKDIR /app
 # Copy the contents of the FrogBot directory to /app in the container
 COPY . /app
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Update pip and install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Make the backup script executable
 RUN chmod +x backup_script.sh
