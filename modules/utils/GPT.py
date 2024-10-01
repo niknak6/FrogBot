@@ -17,6 +17,7 @@ import tiktoken
 import logging
 import disnake
 import asyncio
+import atexit
 
 class HistoryChatMessage:
     def __init__(self, content, role, user_name=None):
@@ -87,6 +88,12 @@ weaviate_client = weaviate.connect_to_local(
     port=8080,
     grpc_port=50051
 )
+
+def close_weaviate_connection():
+    if weaviate_client:
+        weaviate_client.close()
+
+atexit.register(close_weaviate_connection)
 
 search_spec = DuckDuckGoSearchToolSpec()
 def site_search(input, site):
@@ -183,6 +190,9 @@ async def process_message_with_llm(message, client):
 class OpenPilotAssistant(commands.Cog):
     def __init__(self, client):
         self.client = client
+
+    def cog_unload(self):
+        close_weaviate_connection()
 
     @commands.Cog.listener()
     async def on_message(self, message):
