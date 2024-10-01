@@ -1,9 +1,9 @@
 # Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
-# Install rclone, cron, and busybox for crond
+# Install rclone, cron, busybox, and git
 RUN apt-get update && \
-    apt-get install -y rclone cron busybox && \
+    apt-get install -y rclone cron busybox git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
