@@ -6,7 +6,8 @@ llama-index-core
 llama-index-embeddings-huggingface
 llama-index-llms-openai
 llama-index-tools-duckduckgo
-llama-index-vector-stores-elasticsearch
+llama-index-vector-stores-weaviate
+weaviate-client
 llama-index-readers-github
 aiosqlite
 openai

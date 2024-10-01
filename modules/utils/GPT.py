@@ -1,8 +1,8 @@
 # modules.utils.GPT
 
-from llama_index.vector_stores.elasticsearch import ElasticsearchStore, AsyncDenseVectorStrategy
 from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.vector_stores.weaviate import WeaviateVectorStore
 from llama_index.core.llms import ChatMessage, MessageRole as Role
 from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
 from llama_index.core import Settings, VectorStoreIndex
@@ -12,6 +12,7 @@ from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
 from core import read_config
 import traceback
+import weaviate
 import tiktoken
 import logging
 import disnake
@@ -79,6 +80,13 @@ async def fetch_reply_chain(message, max_tokens=8192):
 
 Settings.llm = OpenAI(model='gpt-4o-mini', max_tokens=1000, api_key=read_config().get('OPENAI_API_KEY'))
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
+WEAVIATE_URL = read_config().get("WEAVIATE_URL")
+
+weaviate_client = weaviate.connect_to_local(
+    host=WEAVIATE_URL,
+    port=8080,
+    grpc_port=50051
+)
 
 search_spec = DuckDuckGoSearchToolSpec()
 def site_search(input, site):
@@ -98,14 +106,9 @@ sites = ["comma.ai", "oneclone.net", "springerelectronics.com", "shop.retropilot
 s_tools = {site: create_site_tool(site) for site in sites}
 
 def create_query_engine(collection_name, tool_name, description):
-    config = read_config()
-    vector_store = ElasticsearchStore(
-        index_name=collection_name,
-        es_url=config.get('ELASTICSEARCH_URL'),
-        retrieval_strategy=AsyncDenseVectorStrategy(hybrid=True)
-    )
+    vector_store = WeaviateVectorStore(weaviate_client=weaviate_client, index_name=collection_name)
     index = VectorStoreIndex.from_vector_store(vector_store)
-    engine = index.as_query_engine()
+    engine = index.as_query_engine(vector_store_query_mode="hybrid", similarity_top_k=2, alpha=0.0)
     return QueryEngineTool(
         query_engine=engine,
         metadata=ToolMetadata(
@@ -115,23 +118,23 @@ def create_query_engine(collection_name, tool_name, description):
     )
 
 collections = {
-    "frogai_frogpilot": {
-        "tool_name": "FrogPilot_code",
-        "description": "This collection contains the complete source code for FrogPilot, a fork of OpenPilot, an open-source driving agent that performs the functions of Adaptive Cruise Control (ACC) and Lane Keeping Assist System (LKAS) for various car models."
+    "Commaai_openpilot_release3": {
+        "tool_name": "OpenPilot_code",
+        "description": "This collection contains the complete source code for OpenPilot, an open-source driving agent that performs the functions of Adaptive Cruise Control (ACC) and Lane Keeping Assist System (LKAS) for various car models."
     },
-    "commaai_openpilot": {
+    "Commaai_openpilot_master_ci": {
         "tool_name": "OpenPilot_Docs-Tools",
         "description": "Contains the docs and tools used for OpenPilot."
     },
-    "twilsonco_openpilot": {
+    "Twilsonco_openpilot_log_info": {
         "tool_name": "NNFF",
         "description": "This tool provides an in-depth explanation and analysis of the Neural Network FeedForward (NNFF) mechanism used in OpenPilot. It includes detailed documentation and examples to help understand how NNFF is implemented and utilized in the OpenPilot system. More details can be found at: https://github.com/twilsonco/openpilot/tree/log-info"
     },
-    "commit": {
-        "tool_name": "commit_data",
+    "Commit": {
+        "tool_name": "Commit_data",
         "description": "This collection contains the commit history of the FrogPilot codebase. It provides detailed information about each commit, including changes made, authorship, and timestamps, allowing for comprehensive tracking of the project's development over time."
     },
-    "wiki": {
+    "Wiki": {
         "tool_name": "Wiki",
         "description": "This is the main wiki for FrogPilot, containing extensive data and documentation such as settings, configuration guides, and usage instructions. This data is a work in progress (WIP) and is continuously updated to provide the most accurate and helpful information for users."
     },
@@ -166,7 +169,7 @@ async def process_message_with_llm(message, client):
             "Provide source links for all information. Avoid making up answers."
         ) + channel_prompts['bug-reports' if getattr(message.channel, 'parent_id', None) == 1162100167110053888 else 'default']
         async with thread.typing():
-            chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=False, chat_history=chat_history)
+            chat_engine = OpenAIAgent.from_tools(query_engine_tools, system_prompt=system_prompt, verbose=True, chat_history=chat_history)
             chat_history.append(ChatMessage(content=content, role="user"))
             chat_response = await asyncio.to_thread(chat_engine.chat, content)
         if chat_response and chat_response.response:

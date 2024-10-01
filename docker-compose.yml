@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  frogbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: frogbot
+    volumes:
+      - .:/app
+      - user_points_data:/app/FrogBot/user_points.db
+      - config_data:/app/FrogBot/config.yaml
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python FrogBot/core.py
+    restart: unless-stopped
+
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - user_points_data:/app/FrogBot/user_points.db
+      - config_data:/app/FrogBot/config.yaml
+      - ./rclone.conf:/root/.config/rclone/rclone.conf:ro
+    command: crond -f -d 8
+    depends_on:
+      - frogbot
+
+volumes:
+  user_points_data:
+  config_data:

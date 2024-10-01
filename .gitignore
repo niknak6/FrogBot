@@ -3,6 +3,7 @@
 # Ignore files and directories
 __pycache__/
 .venv/
+.venv_old/
 .vscode/
 CommitHistory/
 FrogWiki/
@@ -12,6 +13,4 @@ elasticsearch-docker.yml
 FrogBot.code-workspace
 gitcommit.py
 user_points.db
-docker-compose.yml
-Dockerfile
 memory_check.py
