@@ -16,8 +16,13 @@ RUN pip install -r requirements.txt
 # Make the backup script executable
 RUN chmod +x backup_script.sh
 
-# Set up cron job
+# Copy the crontab file to the appropriate location
+COPY crontab /etc/cron.d/backup-cron
+
+# Set the correct permissions for the crontab file
 RUN chmod 0644 /etc/cron.d/backup-cron
+
+# Apply the crontab
 RUN crontab /etc/cron.d/backup-cron
 
 # Command to run the application
