@@ -213,11 +213,11 @@ class EmojiCog(commands.Cog):
     class ResolutionView(View):
         REMINDER_TIME = 12 * 60 * 60
         def __init__(self, message, remaining_time=None):
-            super().__init__()
+            super().__init__(timeout=None)
             self.message = message
             self.countdown_task = None
             self.remaining_time = remaining_time or self.REMINDER_TIME * 2
-            no_button = Button(style=ButtonStyle.red, label="Not Resolved")
+            no_button = Button(style=ButtonStyle.red, label="Not Resolved", custom_id="not_resolved")
             no_button.callback = self.on_no_button_clicked
             self.add_item(no_button)
         
@@ -240,11 +240,13 @@ class EmojiCog(commands.Cog):
             )
             await self.message.reply(embed=reminder_embed)
         
-        async def on_no_button_clicked(self, interaction):
+        async def on_no_button_clicked(self, interaction: disnake.MessageInteraction):
             if self.countdown_task:
                 self.countdown_task.cancel()
-            await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (interaction.message.id,))
-            await interaction.message.edit(embed=self.create_followup_embed(), view=self.clear_items())
+            await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (self.message.id,))
+            followup_embed = self.create_followup_embed()
+            await interaction.edit_original_message(embed=followup_embed, view=None)
+            await interaction.followup.send("The issue has been marked as unresolved. Please provide more details for further assistance.", ephemeral=True)
     
         def create_followup_embed(self):
             return Embed(
