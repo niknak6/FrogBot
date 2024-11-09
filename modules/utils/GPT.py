@@ -1,16 +1,16 @@
 # modules.utils.GPT
 
 from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.weaviate import WeaviateVectorStore
 from llama_index.core.llms import ChatMessage, MessageRole as Role
 from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core import Settings, VectorStoreIndex
 from modules.utils.commons import send_long_message
 from llama_index.agent.openai import OpenAIAgent
 from llama_index.llms.openai import OpenAI
 from disnake.ext import commands
-from core import read_config
+from core import config
 import traceback
 import weaviate
 import tiktoken
@@ -79,9 +79,9 @@ async def fetch_reply_chain(message, max_tokens=8192):
         await process_reply_chain(message)
     return list(reversed(context))
 
-Settings.llm = OpenAI(model='gpt-4o-mini', max_tokens=1000, api_key=read_config().get('OPENAI_API_KEY'))
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5", device="cpu")
-WEAVIATE_URL = read_config().get("WEAVIATE_URL")
+Settings.llm = OpenAI(model='gpt-4o-mini', max_tokens=1000, api_key=config.read().get('OPENAI_API_KEY'))
+Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small", api_key=config.read().get('OPENAI_API_KEY'))
+WEAVIATE_URL = config.read().get("WEAVIATE_URL")
 
 weaviate_client = weaviate.connect_to_local(
     host=WEAVIATE_URL,
@@ -115,7 +115,7 @@ s_tools = {site: create_site_tool(site) for site in sites}
 def create_query_engine(collection_name, tool_name, description):
     vector_store = WeaviateVectorStore(weaviate_client=weaviate_client, index_name=collection_name)
     index = VectorStoreIndex.from_vector_store(vector_store)
-    engine = index.as_query_engine(vector_store_query_mode="hybrid", similarity_top_k=2, alpha=0.0)
+    engine = index.as_query_engine(vector_store_query_mode="hybrid", similarity_top_k=4, alpha=0.5)
     return QueryEngineTool(
         query_engine=engine,
         metadata=ToolMetadata(

@@ -211,12 +211,12 @@ class EmojiCog(commands.Cog):
             await message.reply(embed=embed)
 
     class ResolutionView(View):
-        REMINDER_TIME = 12 * 60 * 60
+        REMINDER_TIME = 5 * 24 * 60 * 60
         def __init__(self, message, remaining_time=None):
             super().__init__(timeout=None)
             self.message = message
             self.countdown_task = None
-            self.remaining_time = remaining_time or self.REMINDER_TIME * 2
+            self.remaining_time = remaining_time or (7 * 24 * 60 * 60)
             no_button = Button(style=ButtonStyle.red, label="Not Resolved", custom_id="not_resolved")
             no_button.callback = self.on_no_button_clicked
             self.add_item(no_button)
@@ -235,7 +235,7 @@ class EmojiCog(commands.Cog):
         async def send_reminder(self):
             reminder_embed = Embed(
                 title="Reminder",
-                description="This thread will be closed in 12 hours if no further action is taken.",
+                description="This thread will be closed in 2 days. If you need further assistance, please click 'Not Resolved'.",
                 color=Color.orange()
             )
             await self.message.reply(embed=reminder_embed)

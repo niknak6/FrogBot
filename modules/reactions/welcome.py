@@ -1,7 +1,7 @@
 # modules.reactions.welcome
 
-from core import read_config, update_config
 from disnake.ext import commands
+from core import config
 import asyncio
 import random
 
@@ -13,11 +13,11 @@ class WelcomeCog(commands.Cog):
                          ["https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExYzhsN3Fnd2c1MG1hcmhwMG00czE5ZHZoZmZsa3k4N3hqcWJya2NwdiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/5xtDarIELDLO7lSFQJi/giphy.gif"]
 
     def load_state(self):
-        config = read_config()
+        config = config.read()
         return config.get('non_successful_spawns', 0)
 
     def save_state(self, non_successful_spawns):
-        update_config('non_successful_spawns', non_successful_spawns)
+        config.update('non_successful_spawns', non_successful_spawns)
 
     async def send_welcome_message(self, channel, member, gif=None):
         try:

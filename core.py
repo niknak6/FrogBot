@@ -12,21 +12,81 @@ import disnake
 import yaml
 import sys
 import os
+from functools import wraps
+from typing import Optional
 
 CONFIG_FILE = 'config.yaml'
 
-def read_config():
-    config_path = Path(CONFIG_FILE)
-    return yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+class Config:
+    def __init__(self, filename='config.yaml'):
+        self.filename = filename
+        
+    def read(self):
+        config_path = Path(self.filename)
+        return yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+    
+    def write(self, config):
+        with open(self.filename, 'w') as file:
+            yaml.safe_dump(config, file)
+    
+    def update(self, key, value):
+        config = self.read()
+        config[key] = value
+        self.write(config)
 
-def write_config(config):
-    with open(CONFIG_FILE, 'w') as file:
-        yaml.safe_dump(config, file)
+config = Config(CONFIG_FILE)
 
-def update_config(key, value):
-    config = read_config()
-    config[key] = value
-    write_config(config)
+class GitManager:
+    @staticmethod
+    async def run_command(*args) -> tuple[int, str, str]:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git", *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+        except Exception as e:
+            return -1, "", str(e)
+
+    @staticmethod
+    def get_version():
+        try:
+            version = config.read().get('version', 'unknown-version')
+            branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
+            commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
+            return f"{version} {branch} {commit}"
+        except subprocess.CalledProcessError:
+            return "unknown-version"
+
+class ModuleLoader:
+    @staticmethod
+    def load_single_module(client: commands.Bot, file_path: Path, name: str) -> None:
+        try:
+            spec = importlib.util.spec_from_file_location(name, file_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Failed to load spec for {name}")
+            
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
+                    client.add_cog(attr(client))
+                    logging.info(f"Successfully loaded cog: {attr.__name__}")
+        except Exception as e:
+            logging.error(f"Error loading module {name}: {e}", exc_info=True)
+
+    @staticmethod
+    def load_all_modules(client: commands.Bot, cogs_dir: str = "modules") -> None:
+        for root, _, files in os.walk(cogs_dir):
+            for file in files:
+                if file.endswith('.py'):
+                    file_path = Path(root) / file
+                    module_name = f"{Path(root).name}.{file[:-3]}"
+                    ModuleLoader.load_single_module(client, file_path, module_name)
 
 intents = disnake.Intents.default()
 intents.members = True
@@ -36,44 +96,9 @@ intents.guild_messages = True
 intents.reactions = True
 
 command_sync_flags = commands.CommandSyncFlags.default()
-command_sync_flags.sync_commands_debug = True
+command_sync_flags.sync_commands_debug = False
 
 client = commands.Bot(command_prefix='//||', intents=intents, command_sync_flags=command_sync_flags, test_guilds=[698205243103641711, 1137853399715549214])
-
-def get_git_version():
-    try:
-        version = read_config().get('version', 'unknown-version')
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
-        return f"{version} {branch} {commit}"
-    except subprocess.CalledProcessError:
-        return "unknown-version"
-
-def load_module(file_path, name):
-    try:
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        spec = importlib.util.spec_from_file_location(name, file_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        for attr_name in dir(module):
-            attr = getattr(module, attr_name)
-            if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
-                client.add_cog(attr(client))
-    except Exception as e:
-        logging.error(f"Error loading module {name}: {e}")
-
-def load_modules():
-    cogs_dir = "modules"
-    with ThreadPoolExecutor() as executor:
-        for root, _, files in os.walk(cogs_dir):
-            for file in files:
-                if file.endswith('.py'):
-                    file_path = os.path.join(root, file)
-                    executor.submit(load_module, file_path, f"{Path(root).name}.{file[:-3]}")
 
 async def run_subprocess(*args):
     try:
@@ -89,8 +114,8 @@ async def run_git_command(*cmd):
 async def restart_bot(ctx):
     try:
         message = await ctx.original_response()
-        update_config('restart_message_id', str(message.id))
-        update_config('restart_channel_id', str(ctx.channel.id))
+        config.update('restart_message_id', str(message.id))
+        config.update('restart_channel_id', str(ctx.channel.id))
         await ctx.edit_original_response(content="Restarting...")
         await asyncio.sleep(1)
         subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
@@ -100,20 +125,25 @@ async def restart_bot(ctx):
         logging.error(f"Error restarting the bot: {e}")
 
 async def update_bot(ctx, branch: str):
+    git = GitManager()
     try:
-        current_branch = await run_git_command("rev-parse", "--abbrev-ref", "HEAD")
+        current_branch = await git.run_command("rev-parse", "--abbrev-ref", "HEAD")
         if current_branch[0] != 0:
             raise Exception("Failed to get current branch.")
+            
         if current_branch[1] != branch:
-            checkout_result = await run_git_command("checkout", branch)
+            checkout_result = await git.run_command("checkout", branch)
             if checkout_result[0] != 0:
                 raise Exception(f"Git checkout failed: {checkout_result[2]}")
-        stash_result = await run_git_command("stash")
+                
+        stash_result = await git.run_command("stash")
         if stash_result[0] != 0:
             raise Exception(f"Git stash failed: {stash_result[2]}")
-        pull_result = await run_git_command("pull", "origin", branch)
+            
+        pull_result = await git.run_command("pull", "origin", branch)
         if pull_result[0] != 0:
             raise Exception(f"Git pull failed: {pull_result[2]}")
+            
         await ctx.edit_original_response(content='Update process completed.')
     except Exception as e:
         await ctx.edit_original_response(content=f"Error updating the bot: {e}")
@@ -152,7 +182,7 @@ async def reload_plugins(ctx, message=None):
         existing_commands = client.all_commands.copy()
         for cog_name in list(client.cogs.keys()):
             client.remove_cog(cog_name)
-        load_modules()
+        ModuleLoader.load_all_modules(client)
         for cmd_name, cmd in existing_commands.items():
             if cmd_name not in client.all_commands:
                 client.add_application_command(cmd)
@@ -185,12 +215,11 @@ async def shutdown(ctx):
 
 @client.event
 async def on_ready():
-    await client.change_presence(activity=disnake.Game(name=f"/help | {get_git_version()}"))
+    await client.change_presence(activity=disnake.Game(name=f"/help | {GitManager.get_version()}"))
     print(f'Logged in as {client.user.name}')
     try:
-        config = read_config()
-        restart_channel_id = config.get('restart_channel_id')
-        restart_message_id = config.get('restart_message_id')
+        restart_channel_id = config.read().get('restart_channel_id')
+        restart_message_id = config.read().get('restart_message_id')
         if restart_channel_id and restart_message_id:
             channel = client.get_channel(int(restart_channel_id))
             if channel:
@@ -199,16 +228,20 @@ async def on_ready():
                     await message.edit(content="I'm back online!")
                 except disnake.NotFound:
                     await channel.send("I'm back online!")
-        update_config('restart_channel_id', '')
-        update_config('restart_message_id', '')
+        config.update('restart_channel_id', '')
+        config.update('restart_message_id', '')
     except Exception as e:
         logging.error(f"Error in on_ready: {e}")
 
 if __name__ == "__main__":
-    load_modules()
+    logging.basicConfig(level=logging.INFO)
+    ModuleLoader.load_all_modules(client)
     try:
-        client.run(read_config().get('DISCORD_TOKEN'))
+        token = config.read().get('DISCORD_TOKEN')
+        if not token:
+            raise ValueError("Discord token not found in config")
+        client.run(token)
     except Exception as e:
-        logging.error(f"An error occurred while trying to run the Discord client: {e}")
+        logging.error(f"Failed to start bot: {e}", exc_info=True)
 
 '''Kaofui was here uwu'''
