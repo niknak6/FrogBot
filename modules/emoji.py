@@ -187,7 +187,7 @@ class EmojiCog(commands.Cog):
                 message = await channel.fetch_message(payload.message_id)
                 embed = Embed(
                     title="Issue/Request Resolution",
-                    description="@here, this issue/request has been marked as *resolved!*\nNo further action is needed.\nThis thread will be automatically deleted in *24 hours*.",
+                    description="@here, this issue/request has been marked as *resolved!*\nNo further action is needed.\nThis thread will be automatically deleted in *7 days*.",
                     color=Color.green()
                 )
                 embed.set_footer(text="Please click 'Not Resolved' if this is incorrect.")

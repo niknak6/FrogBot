@@ -1,4 +1,4 @@
-# modules.reactions.radar_bat
+# modules.reactions.radar
 
 from disnake.ext import commands
 import random

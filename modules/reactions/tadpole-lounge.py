@@ -1,6 +1,6 @@
 # modules.reactions.tadpole-lounge
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from disnake.ext import commands
 import disnake
 
@@ -26,7 +26,9 @@ class TadpoleLoungeCog(commands.Cog):
             role = disnake.utils.get(member.guild.roles, name=ROLE_NAME)
             channel = member.guild.get_channel(CHANNEL_ID)
             account_age = datetime.now(timezone.utc) - member.created_at
-            if account_age < timedelta(days=1):
+            print(f"Member: {member.name}, Account age: {account_age}, Created at: {member.created_at}")
+            if account_age.total_seconds() <= (24 * 60 * 60):
+                print(f"Adding role to {member.name}")
                 await self.add_role(member, role, channel)
 
 def setup(bot: commands.Bot) -> None:

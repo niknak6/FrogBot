@@ -38,7 +38,7 @@ def weaviate_connection(client):
 with weaviate_connection(weaviate_client) as client:
     wiki_vector_store = WeaviateVectorStore(weaviate_client=client, index_name="Wiki")
     wiki_vector_store.delete_index()
-    reader = SimpleDirectoryReader(input_dir="FrogWiki/", recursive=True, filename_as_id=True)
+    reader = SimpleDirectoryReader(input_dir="FrogWiki/", recursive=True)
     wiki_docs = reader.load_data(show_progress=True)
     print("Wiki data downloaded successfully. Setting up vector store for wiki...")
     wiki_storage_context = StorageContext.from_defaults(vector_store=wiki_vector_store)
@@ -49,9 +49,7 @@ print("Wiki index setup complete.")
 with weaviate_connection(weaviate_client) as client:
     commit_vector_store = WeaviateVectorStore(weaviate_client=client, index_name="Commit")
     commit_vector_store.delete_index()
-    parser = PandasCSVReader()
-    file_extractor = {".csv": parser}
-    reader = SimpleDirectoryReader(input_dir="CommitHistory", file_extractor=file_extractor)
+    reader = SimpleDirectoryReader(input_dir="CommitHistory", file_extractor={".csv": PandasCSVReader()})
     commit_docs = reader.load_data(show_progress=True)
     print("commit data downloaded successfully. Setting up vector store for commit...")
     commit_storage_context = StorageContext.from_defaults(vector_store=commit_vector_store)
