@@ -56,7 +56,7 @@ class ThreadCreateCog(commands.Cog):
             ),
             color=disnake.Color.blue()
         )
-        embed.set_footer(text="If you need help with any of these steps, please let me know by replying to this message!")
+        embed.set_footer(text="If you need help with any of these steps, please let someone with the 'MarshMentor' role know!")
         view = self.ConfirmationView(None, original_message.author.id)
         message = await original_message.reply(embed=embed, view=view)
         view.message = message

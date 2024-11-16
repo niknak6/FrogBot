@@ -1,6 +1,5 @@
 # modules.utils.commons
 
-from disnake.ext import commands
 import logging
 import disnake
 import re
@@ -59,14 +58,3 @@ async def send_long_message(message, response, should_reply=True):
     except Exception as e:
         logging.error(f"Error in send_long_message: {e}")
         return None
-
-def is_admin_or_privileged(user_id=None, rank_id=None):
-    async def predicate(ctx):
-        if ctx.author.guild_permissions.administrator:
-            return True
-        elif user_id and ctx.author.id == user_id:
-            return True
-        elif rank_id and any(role.id == rank_id for role in ctx.author.roles):
-            return True
-        return False
-    return commands.check(predicate)

@@ -14,8 +14,6 @@ ADMIN_USER_ID = 126123710435295232
 ROLE_ID = 1221297807214776381
 
 EMOJI_ACTIONS = {
-    "👍": "handle_thumbsup_reaction",
-    "👎": "handle_thumbsdown_reaction",
     "✅": "handle_checkmark_reaction"
 }
 
@@ -196,12 +194,6 @@ class EmojiCog(commands.Cog):
                 current_timestamp = int(time.time())
                 await log_checkmark_message_id(reply_message.id, channel.id, current_timestamp)
                 await view.start_countdown()
-
-    async def handle_thumbsup_reaction(self, payload: RawReactionActionEvent):
-        await self.handle_feedback_reaction(payload, "Thank You!", "Thank you for your positive feedback!", Color.green())
-
-    async def handle_thumbsdown_reaction(self, payload: RawReactionActionEvent):
-        await self.handle_feedback_reaction(payload, "Sorry!", "We're sorry to hear that. We'll strive to do better.", Color.red())
 
     async def handle_feedback_reaction(self, payload: RawReactionActionEvent, title: str, description: str, color: Color):
         channel = self.bot.get_channel(payload.channel_id)

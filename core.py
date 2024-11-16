@@ -1,7 +1,6 @@
 # core
 
-from modules.utils.commons import is_admin_or_privileged
-from concurrent.futures import ThreadPoolExecutor
+from typing import Optional, Tuple, Any
 from disnake.ext import commands
 from pathlib import Path
 import importlib.util
@@ -12,24 +11,22 @@ import disnake
 import yaml
 import sys
 import os
-from functools import wraps
-from typing import Optional
 
 CONFIG_FILE = 'config.yaml'
 
 class Config:
-    def __init__(self, filename='config.yaml'):
+    def __init__(self, filename: str = 'config.yaml'):
         self.filename = filename
         
-    def read(self):
+    def read(self) -> dict[str, Any]:
         config_path = Path(self.filename)
         return yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
     
-    def write(self, config):
+    def write(self, config: dict[str, Any]) -> None:
         with open(self.filename, 'w') as file:
             yaml.safe_dump(config, file)
     
-    def update(self, key, value):
+    def update(self, key: str, value: Any) -> None:
         config = self.read()
         config[key] = value
         self.write(config)
@@ -38,22 +35,14 @@ config = Config(CONFIG_FILE)
 
 class GitManager:
     @staticmethod
-    async def run_command(*args) -> tuple[int, str, str]:
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "git", *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await proc.communicate()
-            return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
-        except Exception as e:
-            return -1, "", str(e)
+    async def run_command(*args) -> Tuple[int, str, str]:
+        return await run_subprocess("git", *args)
 
     @staticmethod
-    def get_version():
+    def get_version() -> str:
         try:
-            version = config.read().get('version', 'unknown-version')
+            config_data = config.read()
+            version = config_data.get('version', 'unknown-version')
             branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
             commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
             return f"{version} {branch} {commit}"
@@ -67,10 +56,9 @@ class ModuleLoader:
             spec = importlib.util.spec_from_file_location(name, file_path)
             if spec is None or spec.loader is None:
                 raise ImportError(f"Failed to load spec for {name}")
-            
             module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
             spec.loader.exec_module(module)
-            
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
                 if isinstance(attr, type) and issubclass(attr, commands.Cog) and attr is not commands.Cog:
@@ -88,6 +76,66 @@ class ModuleLoader:
                     module_name = f"{Path(root).name}.{file[:-3]}"
                     ModuleLoader.load_single_module(client, file_path, module_name)
 
+class BotManager:
+    def __init__(self, client: commands.Bot, config: Config):
+        self.client = client
+        self.config = config
+
+    async def restart_bot(self, ctx: commands.Context) -> None:
+        try:
+            message = await ctx.original_response()
+            self.config.update('restart_message_id', str(message.id))
+            self.config.update('restart_channel_id', str(ctx.channel.id))
+            await ctx.edit_original_response(content="Restarting...")
+            await asyncio.sleep(1)
+            subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
+            await self.client.close()
+        except Exception as e:
+            await ctx.edit_original_response(content=f"Error restarting the bot: {e}")
+            logging.error(f"Error restarting the bot: {e}")
+
+    async def update_bot(self, ctx: commands.Context, branch: str) -> None:
+        git = GitManager()
+        try:
+            current_branch = await git.run_command("rev-parse", "--abbrev-ref", "HEAD")
+            if current_branch[0] != 0:
+                raise Exception("Failed to get current branch.")
+            if current_branch[1] != branch:
+                checkout_result = await git.run_command("checkout", branch)
+                if checkout_result[0] != 0:
+                    raise Exception(f"Git checkout failed: {checkout_result[2]}")
+            pull_result = await git.run_command("pull", "origin", branch)
+            if pull_result[0] != 0:
+                raise Exception(f"Git pull failed: {pull_result[2]}")
+            await ctx.edit_original_response(content='Update process completed.')
+        except Exception as e:
+            await ctx.edit_original_response(content=f"Error updating the bot: {e}")
+            logging.error(f"Error updating the bot: {e}")
+            raise
+
+async def run_subprocess(*args) -> Tuple[int, str, str]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+    except Exception as e:
+        return -1, "", str(e)
+
+def is_admin_or_privileged(user_id: Optional[int] = None, rank_id: Optional[int] = None):
+    async def predicate(ctx):
+        if ctx.author.guild_permissions.administrator:
+            return True
+        elif user_id and ctx.author.id == user_id:
+            return True
+        elif rank_id and any(role.id == rank_id for role in ctx.author.roles):
+            return True
+        return False
+    return commands.check(predicate)
+
 intents = disnake.Intents.default()
 intents.members = True
 intents.messages = True
@@ -98,57 +146,14 @@ intents.reactions = True
 command_sync_flags = commands.CommandSyncFlags.default()
 command_sync_flags.sync_commands_debug = False
 
-client = commands.Bot(command_prefix='//||', intents=intents, command_sync_flags=command_sync_flags, test_guilds=[698205243103641711, 1137853399715549214])
+client = commands.Bot(
+    command_prefix='//||',
+    intents=intents,
+    command_sync_flags=command_sync_flags,
+    test_guilds=[698205243103641711, 1137853399715549214]
+)
 
-async def run_subprocess(*args):
-    try:
-        proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await proc.communicate()
-        return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
-    except Exception as e:
-        return -1, "", str(e)
-
-async def run_git_command(*cmd):
-    return await run_subprocess("git", *cmd)
-
-async def restart_bot(ctx):
-    try:
-        message = await ctx.original_response()
-        config.update('restart_message_id', str(message.id))
-        config.update('restart_channel_id', str(ctx.channel.id))
-        await ctx.edit_original_response(content="Restarting...")
-        await asyncio.sleep(1)
-        subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / 'core.py')])
-        await client.close()
-    except Exception as e:
-        await ctx.edit_original_response(content=f"Error restarting the bot: {e}")
-        logging.error(f"Error restarting the bot: {e}")
-
-async def update_bot(ctx, branch: str):
-    git = GitManager()
-    try:
-        current_branch = await git.run_command("rev-parse", "--abbrev-ref", "HEAD")
-        if current_branch[0] != 0:
-            raise Exception("Failed to get current branch.")
-            
-        if current_branch[1] != branch:
-            checkout_result = await git.run_command("checkout", branch)
-            if checkout_result[0] != 0:
-                raise Exception(f"Git checkout failed: {checkout_result[2]}")
-                
-        stash_result = await git.run_command("stash")
-        if stash_result[0] != 0:
-            raise Exception(f"Git stash failed: {stash_result[2]}")
-            
-        pull_result = await git.run_command("pull", "origin", branch)
-        if pull_result[0] != 0:
-            raise Exception(f"Git pull failed: {pull_result[2]}")
-            
-        await ctx.edit_original_response(content='Update process completed.')
-    except Exception as e:
-        await ctx.edit_original_response(content=f"Error updating the bot: {e}")
-        logging.error(f"Error updating the bot: {e}")
-        raise
+bot_manager = BotManager(client, config)
 
 @client.slash_command(description="Update and optionally restart the bot.")
 @is_admin_or_privileged(user_id=126123710435295232)
@@ -156,7 +161,7 @@ async def update(ctx, branch: str = "beta", restart: bool = False, reload: bool 
     await ctx.response.defer(ephemeral=True)
     message = await ctx.original_response()
     try:
-        await update_bot(ctx, branch)
+        await bot_manager.update_bot(ctx, branch)
         await message.edit(content="Update completed.")
         if reload:
             await asyncio.sleep(0.5)
@@ -164,7 +169,7 @@ async def update(ctx, branch: str = "beta", restart: bool = False, reload: bool 
             await reload_plugins(ctx, message)
         if restart:
             await asyncio.sleep(0.5)
-            await restart_bot(ctx)
+            await bot_manager.restart_bot(ctx)
         elif not restart:
             await message.edit(content="Update and reload process completed.")
     except Exception as e:
@@ -195,7 +200,7 @@ async def reload_plugins(ctx, message=None):
 @is_admin_or_privileged(user_id=126123710435295232)
 async def restart(ctx):
     await ctx.response.defer()
-    await restart_bot(ctx)
+    await bot_manager.restart_bot(ctx)
 
 @client.slash_command(description="Shut down the bot.")
 @is_admin_or_privileged(user_id=126123710435295232)
