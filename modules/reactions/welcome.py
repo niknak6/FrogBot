@@ -25,7 +25,7 @@ class WelcomeCog(commands.Cog):
 
     async def send_welcome_message(self, channel, member, gif=None):
         try:
-            await channel.send(f"Hello {member.mention}! We'd recommend you check out the #role-assignments channel to grab a role!")
+            await channel.send(f"Hello {member.mention}! We'd recommend you check out <#1141489993123123220> to grab a role!")
             if gif:
                 await channel.send(gif)
         except Exception as e:
