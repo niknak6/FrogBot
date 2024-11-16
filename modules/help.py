@@ -33,7 +33,9 @@ class HelpCog(commands.Cog):
                 "**/check_points [user]**\n"
                 "Check points for a user.\n\n"
                 "**/shutdown**\n"
-                f"Shutdown {bot_name}, needs confirmation.\n"
+                f"Shutdown {bot_name}, needs confirmation.\n\n"
+                "**/backup**\n"
+                "Force backup the database. Automatically done at midnight UTC daily.\n\n"
             )
         )
         await inter.edit_original_message(embed=embed, view=self.get_help_view("advanced"))

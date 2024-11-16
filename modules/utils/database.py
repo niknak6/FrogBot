@@ -1,11 +1,26 @@
 # modules.utils.database
 
 from disnake.ext import commands
+from core import config
 import aiosqlite
 import asyncio
 import logging
 
-DATABASE_FILE = 'user_points.db'
+DATABASE_FILE = config.read().get('DATABASE_FILE')
+
+_connection_pool = []
+MAX_POOL_SIZE = 5
+
+async def get_connection():
+    if _connection_pool:
+        return _connection_pool.pop()
+    return await aiosqlite.connect(DATABASE_FILE)
+
+async def release_connection(conn):
+    if len(_connection_pool) < MAX_POOL_SIZE:
+        _connection_pool.append(conn)
+    else:
+        await conn.close()
 
 async def initialize_database():
     try:
@@ -27,31 +42,34 @@ async def initialize_database():
     except Exception as e:
         logging.error(f"Error initializing database: {e}")
 
-async def db_access_with_retry(sql_operation, args=(), max_attempts=5, delay=1, timeout=10.0):
+async def db_access_with_retry(sql_operation, args=(), max_attempts=5, delay=1):
     for attempt in range(max_attempts):
+        conn = None
         try:
-            async with aiosqlite.connect(DATABASE_FILE, timeout=timeout) as conn:
-                async with conn.cursor() as cursor:
-                    await cursor.execute(sql_operation, args)
-                    if sql_operation.strip().upper().startswith('SELECT'):
-                        results = await cursor.fetchall()
-                        return results
-                    await conn.commit()
-                return
+            conn = await get_connection()
+            async with conn.cursor() as cursor:
+                await cursor.execute(sql_operation, args)
+                if sql_operation.strip().upper().startswith('SELECT'):
+                    results = await cursor.fetchall()
+                    await release_connection(conn)
+                    return results
+                await conn.commit()
+            await release_connection(conn)
+            return
         except aiosqlite.OperationalError as e:
+            if conn:
+                await conn.close()
             logging.error(f"Failed to execute sql operation: {e}")
             if attempt == max_attempts - 1:
                 raise
             await asyncio.sleep(delay)
 
 async def initialize_points_database(user):
-    user_points = {}
-    rows = await db_access_with_retry('SELECT * FROM user_points')
-    user_points = {user_id: points or 0 for user_id, points in rows}
-    if user.id not in user_points:
-        user_points[user.id] = 0
+    rows = await db_access_with_retry('SELECT points FROM user_points WHERE user_id = ?', (user.id,))
+    if not rows:
         await db_access_with_retry('INSERT INTO user_points (user_id, points) VALUES (?, ?)', (user.id, 0))
-    return user_points
+        return 0
+    return rows[0][0]
 
 async def update_points(user_id, points):
     try:
@@ -78,10 +96,18 @@ async def log_checkmark_message_id(message_id, channel_id, timestamp):
 class DatabaseCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
     @commands.Cog.listener()
     async def on_ready(self):
         await initialize_database()
         logging.debug("Database initialized.")
+    
+    def cog_unload(self):
+        async def cleanup():
+            for conn in _connection_pool:
+                await conn.close()
+            _connection_pool.clear()
+        asyncio.create_task(cleanup())
 
 def setup(bot):
     bot.add_cog(DatabaseCog(bot))
