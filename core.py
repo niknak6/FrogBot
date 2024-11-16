@@ -41,8 +41,7 @@ class GitManager:
     @staticmethod
     def get_version() -> str:
         try:
-            config_data = config.read()
-            version = config_data.get('version', 'unknown-version')
+            version = 'v2.9'
             branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
             commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()[:7]
             return f"{version} {branch} {commit}"
