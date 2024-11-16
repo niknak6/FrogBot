@@ -27,14 +27,17 @@ class KawaiiReactionsCog(commands.Cog):
             raise ValueError("OpenAI API key not found in config")
         self.openai_client = AsyncOpenAI(api_key=api_key)
 
-    async def generate_response(self, response_type):
+    async def generate_response(self, response_type, message_content):
+        use_context = random.random() < 0.5
         try:
+            messages = [
+                {"role": "system", "content": self.SYSTEM_PROMPTS[response_type]},
+            ]
+            if use_context:
+                messages.append({"role": "user", "content": message_content})
             response = await self.openai_client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPTS[response_type]},
-                    {"role": "user", "content": "Generate a response"}
-                ],
+                messages=messages,
                 max_tokens=50,
                 temperature=0.9
             )
@@ -44,9 +47,9 @@ class KawaiiReactionsCog(commands.Cog):
             return random.choice(self.fallback_responses[response_type])
 
     async def send_response(self, message, response_type):
-        new_response = await self.generate_response(response_type)
+        new_response = await self.generate_response(response_type, message.content)
         if new_response == self.last_used[response_type]:
-            new_response = await self.generate_response(response_type)
+            new_response = await self.generate_response(response_type, message.content)
         self.last_used[response_type] = new_response
         await message.channel.send(new_response)
 
