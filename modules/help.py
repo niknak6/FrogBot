@@ -78,8 +78,6 @@ class HelpCog(commands.Cog):
             description=(
                 "### *Keywords for bot reactions will not be listed*\n\n"
                 "--------\n\n"
-                f"**@{bot_name} [question]**\n"
-                f"Ask {bot_name} a question. This is still a WIP.\n\n"
                 "**/check_points**\n"
                 "Check your points and rank.\n\n"
                 "**/tictactoe**\n"
