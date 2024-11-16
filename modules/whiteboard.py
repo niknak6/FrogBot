@@ -1,7 +1,7 @@
 # modules.whiteboard
 
 from disnake import TextInputStyle, ui, ApplicationCommandInteraction, NotFound, Forbidden
-from modules.utils.commons import is_admin_or_privileged
+from core import is_admin_or_privileged
 from disnake.ext import commands
 import asyncio
 
