@@ -56,7 +56,7 @@ class EmojiCog(commands.Cog):
                     continue
                 message = await channel.fetch_message(message_id)
                 elapsed_time = current_time - timestamp
-                remaining_time = self.ResolutionView.REMINDER_TIME * 2 - elapsed_time
+                remaining_time = (7 * 24 * 60 * 60) - elapsed_time
                 if remaining_time > 0:
                     view = self.ResolutionView(message, remaining_time)
                     await message.edit(view=view)
@@ -217,9 +217,9 @@ class EmojiCog(commands.Cog):
             self.countdown_task = asyncio.create_task(self.countdown_with_reminder())
         
         async def countdown_with_reminder(self):
-            await asyncio.sleep(self.remaining_time / 2)
+            await asyncio.sleep(self.REMINDER_TIME)
             await self.send_reminder()
-            await asyncio.sleep(self.remaining_time / 2)
+            await asyncio.sleep(2 * 24 * 60 * 60)
             if isinstance(self.message.channel, Thread):
                 await self.message.channel.delete()
                 await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (self.message.id,))
