@@ -2,9 +2,9 @@
 
 from disnake import Embed, ButtonStyle, Color, PartialEmoji, RawReactionActionEvent, Message, Thread, User
 from modules.utils.database import db_access_with_retry, update_points, log_checkmark_message_id
-from typing import Dict, List, Tuple
 from disnake.ui import View, Button
 from disnake.ext import commands
+from typing import List, Tuple
 import logging
 import disnake
 import asyncio
@@ -34,7 +34,7 @@ EMOJI_RESPONSES = {
 class EmojiCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bot_replies: Dict[int, Dict] = {}
+        self.bot_replies = {}
         self.reaction_lock = asyncio.Lock()
         self.max_retries = 3
         self.retry_delay = 1
@@ -48,27 +48,18 @@ class EmojiCog(commands.Cog):
         current_time = int(time.time())
         for row in rows:
             message_id, channel_id, timestamp = row
+            channel = self.bot.get_channel(channel_id)
+            if not channel:
+                continue
             try:
-                channel = self.bot.get_channel(channel_id)
-                if channel is None:
-                    logging.error(f"Channel ID {channel_id} not found. Removing from database.")
-                    await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
-                    continue
                 message = await channel.fetch_message(message_id)
-                elapsed_time = current_time - timestamp
-                remaining_time = (7 * 24 * 60 * 60) - elapsed_time
+                remaining_time = (7 * 24 * 60 * 60) - (current_time - timestamp)
                 if remaining_time > 0:
                     view = self.ResolutionView(message, remaining_time)
                     await message.edit(view=view)
                     await view.start_countdown()
-                else:
-                    await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
-            except disnake.NotFound:
-                logging.error(f"Message ID {message_id} not found. Removing from database.")
-                await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
-            except Exception as e:
-                logging.error(f"Failed to reactivate 'No' button for message ID {message_id}: {e}")
-                await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (message_id,))
+            except (disnake.NotFound, disnake.HTTPException):
+                continue
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: RawReactionActionEvent):

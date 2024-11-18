@@ -1,6 +1,7 @@
 # modules.auto_backup
 
 from datetime import datetime, timedelta, timezone
+from modules.utils.database import DATABASE_FILE
 from core import Config, CONFIG_FILE
 from disnake.ext import commands
 from disnake import Embed, Color
@@ -18,7 +19,7 @@ class GitHubBackup:
             'Authorization': f'Bearer {token}',
             'Accept': 'application/vnd.github.v3+json'
         }
-        self.db_file = 'user_points.db'
+        self.db_file = DATABASE_FILE
 
     async def backup(self) -> tuple[bool, str]:
         try:
