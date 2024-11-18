@@ -8,9 +8,9 @@ from disnake import Embed, Color
 from typing import Optional
 import asyncio
 import logging
-import base64
 import aiohttp
 import random
+import base64
 import os
 
 REPO_NAME = 'FrogBot_DB_Backup'
@@ -26,11 +26,23 @@ class GitHubBackup:
         }
         self._base_url = 'https://api.github.com'
         logging.info(f"Initializing backup for database: {DB_FILENAME}")
+        logging.info(f"Database full path: {os.path.abspath(DATABASE_FILE)}")
+        logging.info(f"GitHub owner: {owner}")
+        logging.info(f"Repository name: {REPO_NAME}")
 
     async def _make_request(self, method: str, endpoint: str, **kwargs) -> dict:
         async with aiohttp.ClientSession() as session:
             url = f"{self._base_url}/{endpoint}"
+            logging.info(f"Making {method} request to: {url}")
+            if 'json' in kwargs:
+                logging.info(f"Request payload keys: {kwargs['json'].keys()}")
+                if 'content' in kwargs['json']:
+                    logging.info(f"Content length: {len(kwargs['json']['content'])}")
             async with session.request(method, url, headers=self._headers, **kwargs) as response:
+                logging.info(f"Response status: {response.status}")
+                if response.status >= 400:
+                    body = await response.text()
+                    logging.error(f"Error response body: {body}")
                 response.raise_for_status()
                 return await response.json() if response.content_length else None
 
@@ -39,23 +51,33 @@ class GitHubBackup:
             if not os.path.exists(DATABASE_FILE):
                 logging.error(f"Database file not found: {DATABASE_FILE}")
                 return False
+            file_stats = os.stat(DATABASE_FILE)
+            logging.info(f"Database file size: {file_stats.st_size} bytes")
+            logging.info(f"Database file permissions: {oct(file_stats.st_mode)}")
             with open(DATABASE_FILE, 'rb') as f:
                 content = f.read()
+                logging.info(f"Read {len(content)} bytes from database file")
                 encoded_content = base64.b64encode(content).decode()
+                logging.info(f"Encoded content length: {len(encoded_content)}")
             try:
                 current_file = await self._make_request(
                     'GET',
                     f'repos/{self._owner}/{REPO_NAME}/contents/{DB_FILENAME}'
                 )
-                sha = current_file['sha'] if current_file else None
-            except:
-                sha = None
-            data = {
-                'message': f'Backup {DB_FILENAME} - {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}',
-                'content': encoded_content,
-            }
-            if sha:
-                data['sha'] = sha
+                logging.info(f"Current file info received: {current_file}")
+                data = {
+                    'message': f'Backup {DB_FILENAME} - {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}',
+                    'content': encoded_content,
+                    'sha': current_file['sha']
+                }
+            except aiohttp.ClientResponseError as e:
+                if e.status == 404:
+                    data = {
+                        'message': f'Backup {DB_FILENAME} - {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}',
+                        'content': encoded_content
+                    }
+                else:
+                    raise
             await self._make_request(
                 'PUT',
                 f'repos/{self._owner}/{REPO_NAME}/contents/{DB_FILENAME}',
