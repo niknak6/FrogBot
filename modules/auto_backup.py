@@ -70,6 +70,15 @@ class GitHubBackup:
                 if not await self._download_latest():
                     logging.error("Could not download existing database")
                     return False
+            try:
+                current_file = await self._make_request(
+                    'GET',
+                    f'repos/{self._owner}/{REPO_NAME}/contents/{DB_FILENAME}'
+                )
+                sha = current_file.get('sha') if current_file else None
+            except Exception as e:
+                logging.info(f"No existing file found: {e}")
+                sha = None
             with open(DATABASE_FILE, 'rb') as f:
                 content = f.read()
                 encoded_content = base64.b64encode(content).decode()
@@ -77,6 +86,8 @@ class GitHubBackup:
                 'message': f'Backup {DB_FILENAME} - {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}',
                 'content': encoded_content
             }
+            if sha:
+                data['sha'] = sha
             await self._make_request(
                 'PUT',
                 f'repos/{self._owner}/{REPO_NAME}/contents/{DB_FILENAME}',
