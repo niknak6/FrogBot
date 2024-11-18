@@ -20,7 +20,7 @@ class GitHubBackup:
         }
         self.db_file = 'user_points.db'
 
-    async def backup(self) -> bool:
+    async def backup(self) -> tuple[bool, str]:
         try:
             with open(self.db_file, 'rb') as f:
                 content = base64.b64encode(f.read()).decode()
@@ -40,15 +40,17 @@ class GitHubBackup:
                     data['sha'] = sha
                 async with session.put(url, headers=self.headers, json=data) as resp:
                     if resp.status == 200 or resp.status == 201:
+                        response_data = await resp.json()
+                        new_sha = response_data['content']['sha']
                         logging.info("Backup successful")
-                        return True
+                        return True, new_sha
                     else:
                         error_msg = await resp.text()
                         logging.error(f"Backup failed with status {resp.status}: {error_msg}")
-                        return False
+                        return False, None
         except Exception as e:
             logging.error(f"Backup failed: {str(e)}")
-            return False
+            return False, None
 
 class BackupCog(commands.Cog):
     def __init__(self, bot):
@@ -62,7 +64,7 @@ class BackupCog(commands.Cog):
         self.backup_task = self.bot.loop.create_task(self.scheduled_backup())
         logging.info("Scheduled daily backup task initialized")
 
-    async def create_backup_embed(self, success: bool, scheduled: bool = False) -> Embed:
+    async def create_backup_embed(self, success: bool, scheduled: bool = False, sha: str = None) -> Embed:
         if success:
             embed = Embed(
                 title="✅ Backup Successful",
@@ -86,8 +88,8 @@ class BackupCog(commands.Cog):
             inline=True
         )
         embed.add_field(
-            name="Repository",
-            value=f"[{self.backup_handler.repo}](https://github.com/{self.backup_handler.owner}/{self.backup_handler.repo})",
+            name="Commit",
+            value=sha[:7] if sha else "Unknown",
             inline=True
         )
         return embed
@@ -101,12 +103,12 @@ class BackupCog(commands.Cog):
             logging.info(f"Next scheduled backup in {wait_time/3600:.2f} hours")
             await asyncio.sleep(wait_time)
             try:
-                success = await self.backup_handler.backup()
+                success, sha = await self.backup_handler.backup()
                 logging.info(f"Scheduled backup {'successful' if success else 'failed'}")
                 try:
                     owner = await self.bot.fetch_user(self.owner_id)
                     if owner:
-                        embed = await self.create_backup_embed(success, scheduled=True)
+                        embed = await self.create_backup_embed(success, scheduled=True, sha=sha)
                         await owner.send(embed=embed)
                 except Exception as e:
                     logging.error(f"Failed to send DM to owner: {e}")
@@ -121,8 +123,8 @@ class BackupCog(commands.Cog):
     @commands.is_owner()
     async def backup(self, inter):
         await inter.response.defer()
-        success = await self.backup_handler.backup()
-        embed = await self.create_backup_embed(success, scheduled=False)
+        success, sha = await self.backup_handler.backup()
+        embed = await self.create_backup_embed(success, scheduled=False, sha=sha)
         await inter.followup.send(embed=embed)
 
 def setup(bot):
