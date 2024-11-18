@@ -46,38 +46,37 @@ class GitHubBackup:
                 response.raise_for_status()
                 return await response.json() if response.content_length else None
 
+    async def _download_latest(self) -> bool:
+        try:
+            response = await self._make_request(
+                'GET',
+                f'repos/{self._owner}/{REPO_NAME}/contents/{DB_FILENAME}'
+            )
+            if response and 'content' in response:
+                content = base64.b64decode(response['content'])
+                with open(DATABASE_FILE, 'wb') as f:
+                    f.write(content)
+                logging.info(f"Successfully downloaded {DB_FILENAME}")
+                return True
+            return False
+        except Exception as e:
+            logging.error(f"Download failed for {DB_FILENAME}: {str(e)}")
+            return False
+
     async def backup_database(self) -> bool:
         try:
             if not os.path.exists(DATABASE_FILE):
-                logging.error(f"Database file not found: {DATABASE_FILE}")
-                return False
-            file_stats = os.stat(DATABASE_FILE)
-            logging.info(f"Database file size: {file_stats.st_size} bytes")
-            logging.info(f"Database file permissions: {oct(file_stats.st_mode)}")
+                logging.info(f"Local database not found, attempting to download...")
+                if not await self._download_latest():
+                    logging.error("Could not download existing database")
+                    return False
             with open(DATABASE_FILE, 'rb') as f:
                 content = f.read()
-                logging.info(f"Read {len(content)} bytes from database file")
                 encoded_content = base64.b64encode(content).decode()
-                logging.info(f"Encoded content length: {len(encoded_content)}")
-            try:
-                current_file = await self._make_request(
-                    'GET',
-                    f'repos/{self._owner}/{REPO_NAME}/contents/{DB_FILENAME}'
-                )
-                logging.info(f"Current file info received: {current_file}")
-                data = {
-                    'message': f'Backup {DB_FILENAME} - {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}',
-                    'content': encoded_content,
-                    'sha': current_file['sha']
-                }
-            except aiohttp.ClientResponseError as e:
-                if e.status == 404:
-                    data = {
-                        'message': f'Backup {DB_FILENAME} - {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}',
-                        'content': encoded_content
-                    }
-                else:
-                    raise
+            data = {
+                'message': f'Backup {DB_FILENAME} - {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}',
+                'content': encoded_content
+            }
             await self._make_request(
                 'PUT',
                 f'repos/{self._owner}/{REPO_NAME}/contents/{DB_FILENAME}',
@@ -86,7 +85,7 @@ class GitHubBackup:
             logging.info(f"Successfully created backup of {DB_FILENAME}")
             return True
         except Exception as e:
-            logging.error(f"Backup failed for {DB_FILENAME}: {e}")
+            logging.error(f"Backup failed for {DB_FILENAME}: {str(e)}")
             return False
 
 class BackupCog(commands.Cog):
