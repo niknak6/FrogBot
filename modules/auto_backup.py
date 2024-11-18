@@ -40,10 +40,16 @@ class GitHubBackup:
                     data['sha'] = sha
                 async with session.put(url, headers=self.headers, json=data) as resp:
                     if resp.status == 200 or resp.status == 201:
-                        response_data = await resp.json()
-                        new_sha = response_data['content']['sha']
-                        logging.info("Backup successful")
-                        return True, new_sha
+                        commits_url = f'https://api.github.com/repos/{self.owner}/{self.repo}/commits'
+                        async with session.get(commits_url, headers=self.headers) as commit_resp:
+                            if commit_resp.status == 200:
+                                commits = await commit_resp.json()
+                                if commits:
+                                    commit_sha = commits[0]['sha']
+                                    logging.info("Backup successful")
+                                    return True, commit_sha
+                        logging.error("Failed to get commit SHA")
+                        return True, None
                     else:
                         error_msg = await resp.text()
                         logging.error(f"Backup failed with status {resp.status}: {error_msg}")
