@@ -89,7 +89,7 @@ class BackupCog(commands.Cog):
         )
         embed.add_field(
             name="Commit",
-            value=sha[:7] if sha else "Unknown",
+            value=f"[{sha[:7]}](https://github.com/{self.backup_handler.owner}/{self.backup_handler.repo}/commit/{sha})" if sha else "Unknown",
             inline=True
         )
         return embed
