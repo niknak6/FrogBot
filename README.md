@@ -27,7 +27,6 @@
 - Help command with different categories (General, Points, Advanced)
 - Bot update and restart commands for admins
 - Automatic thread management for bug reports and feature requests
-- AI-powered chat assistant using GPT models
 - Custom emoji reactions and responses
 - Welcome messages for new members
 - Translation feature for messages
@@ -39,7 +38,6 @@
 - To add points to a user: `/add points user`
 - To remove points from a user: `/remove points user`
 - To check a user's points: `/check_points`
-- Ask questions or seek information by mentioning the bot in your message: `@{bot name} What's the current price of a C3?`
 - Use `/help` for more information on available commands.
 
 ## 🤝 Contributing
