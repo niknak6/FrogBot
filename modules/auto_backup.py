@@ -1,9 +1,20 @@
 # modules.auto_backup
 
-from datetime import datetime, timezone
-import aiohttp
-import base64
+from datetime import datetime, time, timedelta, timezone
+from modules.utils.database import DATABASE_FILE
+from core import Config, CONFIG_FILE
+from disnake.ext import commands
+from disnake import Embed, Color
+from typing import Optional
+import asyncio
 import logging
+import aiohttp
+import random
+import base64
+import os
+
+REPO_NAME = 'FrogBot_DB_Backup'
+DB_FILENAME = os.path.basename(DATABASE_FILE)
 
 class GitHubBackup:
     def __init__(self, token: str, owner: str):
