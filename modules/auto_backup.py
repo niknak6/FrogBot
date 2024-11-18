@@ -1,7 +1,6 @@
 # modules.auto_backup
 
 from datetime import datetime, timedelta, timezone
-from modules.utils.database import DATABASE_FILE
 from core import Config, CONFIG_FILE
 from disnake.ext import commands
 from disnake import Embed, Color
@@ -59,6 +58,7 @@ class BackupCog(commands.Cog):
             token=config['GITHUB_TOKEN'],
             owner=config['GITHUB_USERNAME']
         )
+        self.owner_id = 126123710435295232
         self.backup_task = self.bot.loop.create_task(self.scheduled_backup())
         logging.info("Scheduled daily backup task initialized")
 
@@ -103,6 +103,13 @@ class BackupCog(commands.Cog):
             try:
                 success = await self.backup_handler.backup()
                 logging.info(f"Scheduled backup {'successful' if success else 'failed'}")
+                try:
+                    owner = await self.bot.fetch_user(self.owner_id)
+                    if owner:
+                        embed = await self.create_backup_embed(success, scheduled=True)
+                        await owner.send(embed=embed)
+                except Exception as e:
+                    logging.error(f"Failed to send DM to owner: {e}")
             except Exception as e:
                 logging.error(f"Error during scheduled backup: {str(e)}")
 
