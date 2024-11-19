@@ -26,7 +26,8 @@ class GitHubBackup:
             with open(self.db_file, 'rb') as f:
                 content = base64.b64encode(f.read()).decode()
             async with aiohttp.ClientSession() as session:
-                url = f'https://api.github.com/repos/{self.owner}/{self.repo}/contents/{self.db_file}'
+                filename = self.db_file.split('/')[-1]
+                url = f'https://api.github.com/repos/{self.owner}/{self.repo}/contents/{filename}'
                 async with session.get(url, headers=self.headers) as resp:
                     if resp.status == 200:
                         current_file = await resp.json()
