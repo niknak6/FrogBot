@@ -28,7 +28,7 @@ COMBINED_PROMPT = """You are a translation assistant. Your job is to:
 Previous conversation context:"""
 
 MODEL_NAME = "gpt-4o-mini"
-USAGE_THRESHOLD = 5
+USAGE_THRESHOLD = 1
 PREFERRED_LANG_THRESHOLD = 70
 
 class TranslationCog(commands.Cog):
@@ -36,19 +36,94 @@ class TranslationCog(commands.Cog):
         self.bot = bot
         self.thread_histories: Dict[int, List[dict]] = {}
         self.MAX_HISTORY = 50
+        self.MAX_CACHED_THREADS = 1000
         self.language_usage: Dict[int, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self.language_usage_cache = {}
         self.NUM_WORKERS = 3
         self.translation_queue = Queue()
         self.worker_tasks: List[Task] = []
+        self.cleanup_task = None
+
+    async def setup_tasks(self):
+        self.cleanup_task = create_task(self.periodic_cleanup())
         for _ in range(self.NUM_WORKERS):
             self.worker_tasks.append(create_task(self.translation_worker()))
 
-    async def load_language_usage(self, user_id: int):
-        if user_id not in self.language_usage_cache:
-            usage_data = await database.get_language_usage(user_id)
-            self.language_usage[user_id] = defaultdict(int, usage_data)
-            self.language_usage_cache[user_id] = True
+    @commands.Cog.listener()
+    async def on_ready(self):
+        await self.setup_tasks()
+
+    async def periodic_cleanup(self):
+        while True:
+            try:
+                self.thread_histories = {
+                    thread_id: history 
+                    for thread_id, history in self.thread_histories.items()
+                    if await database.is_thread_active(thread_id)
+                }
+                if len(self.thread_histories) > self.MAX_CACHED_THREADS:
+                    oldest_threads = sorted(
+                        self.thread_histories.keys(),
+                        key=lambda x: len(self.thread_histories[x])
+                    )[:len(self.thread_histories) - self.MAX_CACHED_THREADS]
+                    for thread_id in oldest_threads:
+                        del self.thread_histories[thread_id]
+                self.language_usage_cache.clear()
+                logging.info(f"Cleanup completed. Thread histories: {len(self.thread_histories)}")
+            except Exception as e:
+                logging.error(f"Error during cleanup: {e}")
+            await asyncio.sleep(3600)
+
+    def cog_unload(self):
+        if self.cleanup_task:
+            self.cleanup_task.cancel()
+        for task in self.worker_tasks:
+            task.cancel()
+        self.thread_histories.clear()
+        self.language_usage_cache.clear()
+        self.language_usage.clear()
+
+    async def on_thread_delete(self, thread: disnake.Thread):
+        await database.clear_thread_data(thread.id)
+        self.thread_histories.pop(thread.id, None)
+        logging.info(f"Cleaned up data for deleted thread {thread.id}")
+
+    def _format_language_name(self, lang: str) -> str:
+        return ' '.join(word.capitalize() for word in lang.split())
+
+    async def handle_message_translation(self, content: str, target_langs: Set[str], thread_id: int, username: str, user_id: int, message: Union[disnake.Message, disnake.ModalInteraction]) -> tuple[str, Dict[str, str]]:
+        try:
+            if isinstance(message, disnake.Message) and message.mentions:
+                for mention in message.mentions:
+                    content = content.replace(f'<@{mention.id}>', mention.display_name).replace(f'<@!{mention.id}>', mention.display_name)
+            readable_langs = [self._format_language_name(lang) for lang in target_langs]
+            prompt = f"Detect the language of this text and translate it to {', '.join(readable_langs)}:\n{content}"
+            response = await self._make_openai_request(
+                self._prepare_message(thread_id, prompt, username),
+                thread_id
+            )
+            lines = response.strip().split('\n')
+            detected_lang = lines[0].replace('DETECTED:', '').strip().lower()
+            translations = {
+                line.split(':', 1)[0].strip().lower(): trans.strip()
+                for line in lines[2:]
+                if ':' in line
+                for _, trans in [line.split(':', 1)]
+            }
+            await asyncio.gather(
+                database.update_language_usage(user_id, detected_lang),
+                self._update_user_language_preference(user_id, detected_lang, thread_id)
+            )
+            if thread_id in self.thread_histories and len(self.thread_histories[thread_id]) > self.MAX_HISTORY:
+                self.thread_histories[thread_id] = (
+                    [self.thread_histories[thread_id][0]]
+                    + self.thread_histories[thread_id][-(self.MAX_HISTORY-1):]
+                )
+            return detected_lang, translations
+        except Exception as e:
+            logging.error(f"Translation error: {e}")
+            self.thread_histories.pop(thread_id, None)
+            raise
 
     async def _make_openai_request(self, messages: List[dict], thread_id: int) -> str:
         try:
@@ -67,30 +142,6 @@ class TranslationCog(commands.Cog):
         except Exception as e:
             logging.error(f"OpenAI API error: {e}")
             raise
-
-    async def handle_message_translation(self, content: str, target_langs: Set[str], thread_id: int, username: str, user_id: int, message: Union[disnake.Message, disnake.ModalInteraction]) -> tuple[str, Dict[str, str]]:
-        if isinstance(message, disnake.Message) and message.mentions:
-            for mention in message.mentions:
-                content = content.replace(f'<@{mention.id}>', mention.display_name).replace(f'<@!{mention.id}>', mention.display_name)
-        readable_langs = [' '.join(word.capitalize() for word in lang.split()) for lang in target_langs]
-        prompt = f"Detect the language of this text and translate it to {', '.join(readable_langs)}:\n{content}"
-        response = await self._make_openai_request(
-            self._prepare_message(thread_id, prompt, username),
-            thread_id
-        )
-        lines = response.strip().split('\n')
-        detected_lang = lines[0].replace('DETECTED:', '').strip().lower()
-        translations = {
-            line.split(':', 1)[0].strip().lower(): trans.strip()
-            for line in lines[2:]
-            if ':' in line
-            for _, trans in [line.split(':', 1)]
-        }
-        await asyncio.gather(
-            database.update_language_usage(user_id, detected_lang),
-            self._update_user_language_preference(user_id, detected_lang, thread_id)
-        )
-        return detected_lang, translations
 
     async def _update_user_language_preference(self, user_id: int, detected_lang: str, thread_id: int):
         if user_id not in self.language_usage:
@@ -130,7 +181,7 @@ class TranslationCog(commands.Cog):
         if not auto:
             embed.add_field(name="📝 Original", value=f"```{original_text}```", inline=False)
         for lang, text in translations.items():
-            display_lang = ' '.join(word.capitalize() for word in lang.split())
+            display_lang = self._format_language_name(lang)
             embed.add_field(name=f"🔄 {display_lang}", value=f"```{text}```", inline=False)
         author = message.author
         embed.set_author(
@@ -143,6 +194,8 @@ class TranslationCog(commands.Cog):
     async def translation_worker(self):
         while True:
             try:
+                job = None
+                translations = None
                 job = await self.translation_queue.get()
                 message, content, target_langs, thread_id, username, user_id = job
                 try:
@@ -164,6 +217,8 @@ class TranslationCog(commands.Cog):
                     worker_id = id(asyncio.current_task())
                     logging.error(f"Error in worker {worker_id}: {e}")
                 finally:
+                    del job
+                    del translations
                     self.translation_queue.task_done()
             except Exception as e:
                 worker_id = id(asyncio.current_task())
@@ -187,10 +242,6 @@ class TranslationCog(commands.Cog):
             message, content, set(thread_languages), 
             thread_id, username, user_id
         ))
-
-    def cog_unload(self):
-        for task in self.worker_tasks:
-            task.cancel()
 
     @commands.slash_command(name="translate", description="Translation management commands")
     async def translate_group(self, inter: disnake.ApplicationCommandInteraction):
@@ -326,11 +377,6 @@ class TranslationCog(commands.Cog):
                 )
         await inter.response.send_message(embed=embed, ephemeral=True)
 
-    @commands.Cog.listener()
-    async def on_thread_delete(self, thread: disnake.Thread):
-        await database.clear_thread_data(thread.id)
-        self.thread_histories.pop(thread.id, None)
-
     async def language_usage_stats(self, inter: disnake.ApplicationCommandInteraction):
         user_id = inter.author.id
         if user_id not in self.language_usage:
@@ -381,6 +427,14 @@ class TranslationCog(commands.Cog):
             color=color
         )
         await inter.response.send_message(embed=embed, ephemeral=ephemeral)
+
+    async def load_language_usage(self, user_id: int):
+        try:
+            usage_data = await database.get_language_usage(user_id)
+            self.language_usage[user_id] = defaultdict(int, usage_data)
+        except Exception as e:
+            logging.error(f"Error loading language usage for user {user_id}: {e}")
+            self.language_usage[user_id] = defaultdict(int)
 
 def setup(bot):
     bot.add_cog(TranslationCog(bot))
