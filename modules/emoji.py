@@ -203,6 +203,9 @@ class EmojiCog(commands.Cog):
             no_button = Button(style=ButtonStyle.red, label="Not Resolved", custom_id="not_resolved")
             no_button.callback = self.on_no_button_clicked
             self.add_item(no_button)
+            close_button = Button(style=ButtonStyle.green, label="Close Now", custom_id="close_now")
+            close_button.callback = self.on_close_button_clicked
+            self.add_item(close_button)
         
         async def start_countdown(self):
             self.countdown_task = asyncio.create_task(self.countdown_with_reminder())
@@ -230,7 +233,14 @@ class EmojiCog(commands.Cog):
             followup_embed = self.create_followup_embed()
             await interaction.edit_original_message(embed=followup_embed, view=None)
             await interaction.followup.send("The issue has been marked as unresolved. Please provide more details for further assistance.", ephemeral=True)
-    
+        
+        async def on_close_button_clicked(self, interaction: disnake.MessageInteraction):
+            if self.countdown_task:
+                self.countdown_task.cancel()
+            await db_access_with_retry('DELETE FROM checkmark_logs WHERE message_id = ?', (self.message.id,))
+            if isinstance(self.message.channel, Thread):
+                await self.message.channel.delete()
+        
         def create_followup_embed(self):
             return Embed(
                 title="Further Assistance Needed",
