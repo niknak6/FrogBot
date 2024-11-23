@@ -1,8 +1,8 @@
 # modules.translate
 
+from typing import Dict, Set, List, Union
 from collections import defaultdict
 from modules.utils import database
-from typing import Dict, Set, List, Union
 from disnake import Embed, Color
 from disnake.ext import commands
 from core import config
