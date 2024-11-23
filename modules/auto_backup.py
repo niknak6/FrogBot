@@ -113,13 +113,14 @@ class BackupCog(commands.Cog):
             try:
                 success, sha = await self.backup_handler.backup()
                 logging.info(f"Scheduled backup {'successful' if success else 'failed'}")
-                try:
-                    owner = await self.bot.fetch_user(self.owner_id)
-                    if owner:
-                        embed = await self.create_backup_embed(success, scheduled=True, sha=sha)
-                        await owner.send(embed=embed)
-                except Exception as e:
-                    logging.error(f"Failed to send DM to owner: {e}")
+                if not success:
+                    try:
+                        owner = await self.bot.fetch_user(self.owner_id)
+                        if owner:
+                            embed = await self.create_backup_embed(success, scheduled=True, sha=sha)
+                            await owner.send(embed=embed)
+                    except Exception as e:
+                        logging.error(f"Failed to send DM to owner: {e}")
             except Exception as e:
                 logging.error(f"Error during scheduled backup: {str(e)}")
 
