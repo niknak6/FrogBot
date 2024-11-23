@@ -62,6 +62,14 @@ async def initialize_database():
                     PRIMARY KEY (thread_id, language)
                 )
             ''')
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS language_usage_stats (
+                    user_id INTEGER NOT NULL,
+                    language TEXT NOT NULL,
+                    message_count INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (user_id, language)
+                )
+            ''')
             await conn.commit()
     except Exception as e:
         logging.error(f"Error initializing database: {e}")
@@ -172,6 +180,26 @@ async def clear_thread_data(thread_id: int):
         await conn.execute('DELETE FROM thread_languages WHERE thread_id = ?', (thread_id,))
         await conn.execute('DELETE FROM checkmark_logs WHERE channel_id = ?', (thread_id,))
         await conn.commit()
+
+async def update_language_usage(user_id: int, language: str):
+    await db_access_with_retry(
+        'INSERT INTO language_usage_stats (user_id, language, message_count) VALUES (?, ?, 1) '
+        'ON CONFLICT(user_id, language) DO UPDATE SET message_count = message_count + 1',
+        (user_id, language)
+    )
+
+async def get_language_usage(user_id: int) -> Dict[str, int]:
+    rows = await db_access_with_retry(
+        'SELECT language, message_count FROM language_usage_stats WHERE user_id = ?',
+        (user_id,)
+    )
+    return {row[0]: row[1] for row in rows} if rows else {}
+
+async def clear_language_usage(user_id: int):
+    await db_access_with_retry(
+        'DELETE FROM language_usage_stats WHERE user_id = ?',
+        (user_id,)
+    )
 
 class ThreadCleanupManager:
     def __init__(self, bot):
