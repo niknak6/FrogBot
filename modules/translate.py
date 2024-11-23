@@ -325,5 +325,20 @@ class TranslationCog(commands.Cog):
             Color.green()
         )
 
+    async def _send_embed_response(
+        self, 
+        inter: disnake.ApplicationCommandInteraction,
+        title: str,
+        description: str,
+        color: disnake.Color,
+        ephemeral: bool = True
+    ):
+        embed = Embed(
+            title=title,
+            description=description,
+            color=color
+        )
+        await inter.response.send_message(embed=embed, ephemeral=ephemeral)
+
 def setup(bot):
     bot.add_cog(TranslationCog(bot))
