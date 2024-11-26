@@ -11,6 +11,10 @@ DISCORD_TOKEN: "(REPLACE)"
 # Replace with your OpenAI API key
 # OPENAI_API_KEY: "(REPLACE IF USED)"
 
+# Database file
+# Replace with the name you want your database file to be
+# DATABASE_FILE: "(REPLACE IF USED)"
+
 # GitHub Token
 # Replace with your GitHub token if needed for GitHub API access
 # GITHUB_TOKEN: "(REPLACE IF USED)"
