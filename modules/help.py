@@ -3,6 +3,31 @@
 from disnake import Embed, ButtonStyle
 from disnake.ui import View, Button
 from disnake.ext import commands
+import logging
+
+class HelpView(View):
+    def __init__(self, cog, current_page):
+        super().__init__(timeout=300)
+        if current_page != "general":
+            self.add_item(Button(label="General", style=ButtonStyle.primary, custom_id="help_general"))
+        if current_page != "points":
+            self.add_item(Button(label="Points", style=ButtonStyle.primary, custom_id="help_points"))
+        if current_page != "advanced":
+            self.add_item(Button(label="Advanced", style=ButtonStyle.primary, custom_id="help_advanced"))
+        self.cog = cog
+
+    async def interaction_check(self, inter) -> bool:
+        try:
+            if inter.component.custom_id == "help_general":
+                await self.cog.general_help(inter, inter.guild.me.display_name)
+            elif inter.component.custom_id == "help_points":
+                await self.cog.points_help(inter)
+            elif inter.component.custom_id == "help_advanced":
+                await self.cog.advanced_help(inter, inter.guild.me.display_name)
+            return True
+        except Exception as e:
+            logging.error(f"Error in help interaction: {e}")
+            return False
 
 class HelpCog(commands.Cog):
     def __init__(self, client):
@@ -99,24 +124,7 @@ class HelpCog(commands.Cog):
         await inter.edit_original_message(embed=embed, view=self.get_help_view("general"))
 
     def get_help_view(self, current_page):
-        view = View()
-        if current_page != "general":
-            view.add_item(Button(label="General", style=ButtonStyle.primary, custom_id="help_general"))
-        if current_page != "points":
-            view.add_item(Button(label="Points", style=ButtonStyle.primary, custom_id="help_points"))
-        if current_page != "advanced":
-            view.add_item(Button(label="Advanced", style=ButtonStyle.primary, custom_id="help_advanced"))
-        return view
-
-    @commands.Cog.listener()
-    async def on_button_click(self, inter):
-        await inter.response.defer()  # Ensure the interaction is deferred
-        if inter.component.custom_id == "help_general":
-            await self.general_help(inter, inter.guild.me.display_name)
-        elif inter.component.custom_id == "help_points":
-            await self.points_help(inter)
-        elif inter.component.custom_id == "help_advanced":
-            await self.advanced_help(inter, inter.guild.me.display_name)
+        return HelpView(self, current_page)
 
 def setup(client):
     client.add_cog(HelpCog(client))

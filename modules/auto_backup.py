@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from modules.utils.database import DATABASE_FILE
-from core import Config, CONFIG_FILE
+from core import Config, CONFIG
 from disnake.ext import commands
 from disnake import Embed, Color
 import asyncio
@@ -63,7 +63,7 @@ class GitHubBackup:
 class BackupCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        config = Config(CONFIG_FILE).read()
+        config = Config(CONFIG['CONFIG_FILE']).read()
         self.backup_handler = GitHubBackup(
             token=config['GITHUB_TOKEN'],
             owner=config['GITHUB_USERNAME']
