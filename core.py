@@ -163,19 +163,16 @@ class BotManager:
         try:
             current_modules = ModuleLoader.get_available_modules()
             current_branch = await GitManager.get_current_branch()
-            
             commands = [
-                ["git", "fetch", "origin"],  # First fetch updates
+                ["git", "fetch", "origin"],
                 ["git", "checkout", branch] if current_branch != branch else None,
                 ["git", "pull", "origin", branch]
             ]
-            
             for cmd in commands:
-                if cmd:  # Skip None commands
-                    code, stdout, stderr = await GitManager.run_cmd(*cmd)
+                if cmd:
+                    code, _, stderr = await GitManager.run_cmd(*cmd)
                     if code != 0:
                         raise Exception(f"Git command failed: {' '.join(cmd)}, Error: {stderr}")
-            
             remote_modules = await GitManager.get_remote_modules()
             for category, modules in remote_modules.items():
                 for module_name, url in modules.items():
