@@ -45,6 +45,8 @@ class HelpCog(commands.Cog):
             description=(
                 "### *Admin permissions are required*\n\n"
                 "--------\n\n"
+                "**/control_panel**\n"
+                "Open's a control panel that allows you to manage the bot.\n\n"
                 "**/whiteboard**\n"
                 "Open's a whiteboard that users can type in. You can edit messages sent by whiteboard by copying the message ID and pasting it in the Message ID field.\n\n"
                 "**/translate thread [enable/disable/status]**\n"
