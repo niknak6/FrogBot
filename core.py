@@ -145,12 +145,18 @@ class BotManager:
             config.update('restart_channel_id', str(inter.channel.id))
             if inter.message:
                 config.update('restart_message_id', str(inter.message.id))
-            await inter.response.edit_message(content="Restarting...")
+            if not inter.response.is_done():
+                await inter.response.edit_message(content="Restarting...")
+            else:
+                await inter.edit_original_message(content="Restarting...")
             subprocess.Popen([sys.executable, str(Path(__file__).resolve())])
             await self.client.close()
         except Exception as e:
-            resp = inter.response.send_message if not inter.response.is_done() else inter.edit_original_message
-            await resp(content=f"Error restarting: {e}", ephemeral=True)
+            error_msg = f"Error restarting: {e}"
+            if not inter.response.is_done():
+                await inter.response.send_message(content=error_msg)
+            else:
+                await inter.edit_original_message(content=error_msg)
             logging.error(f"Restart error: {e}")
 
     async def update_bot(self, ctx: commands.Context, branch: str) -> None:
@@ -503,8 +509,11 @@ class UpdateView(disnake.ui.View):
                 )
             elif inter.component.custom_id == "update_and_restart":
                 await inter.response.edit_message(content="Updating and restarting...", view=None)
-                await bot_manager.update_bot(inter, self.branch)
-                await bot_manager.restart_bot(inter)
+                try:
+                    await bot_manager.update_bot(inter, self.branch)
+                    await bot_manager.restart_bot(inter)
+                except Exception as e:
+                    await inter.edit_original_message(content=f"Error during update: {e}")
             elif inter.component.type == disnake.ComponentType.select:
                 self.branch = inter.values[0]
                 await inter.response.edit_message(
