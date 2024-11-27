@@ -2,6 +2,7 @@
 
 from typing import Optional, Tuple, Any
 from disnake.ext import commands
+from datetime import datetime
 from pathlib import Path
 import importlib.util
 import subprocess
@@ -277,19 +278,20 @@ class ModuleLoader:
     @staticmethod
     async def download_module(url: str, category: str, filename: str) -> bool:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        if category == "root":
-                            module_path = CONFIG['COGS_DIR'] / filename
-                        else:
-                            module_dir = CONFIG['COGS_DIR'] / category
-                            module_dir.mkdir(exist_ok=True)
-                            (module_dir / '__init__.py').touch()
-                            module_path = module_dir / filename
-                        module_path.write_text(await response.text(), encoding='utf-8')
-                        return True
-            return False
+            temp_branch = f"temp_module_{int(datetime.now().timestamp())}"
+            commands = [
+                ["git", "fetch", "origin"],
+                ["git", "checkout", "-b", temp_branch],
+                ["git", "checkout", "origin/beta", "--", f"modules/{category if category != 'root' else ''}/{filename}".strip('/')],
+                ["git", "checkout", "-"],
+                ["git", "branch", "-D", temp_branch]
+            ]
+            for cmd in commands:
+                code, _, stderr = await GitManager.run_cmd(*cmd)
+                if code != 0:
+                    logging.error(f"Git command failed: {' '.join(cmd)}, Error: {stderr}")
+                    return False
+            return True
         except Exception as e:
             logging.error(f"Error downloading module: {e}")
             return False
@@ -511,9 +513,9 @@ class UpdateView(disnake.ui.View):
                 )
             return True
         except Exception as e:
-            if not inter.response.is_done():
-                await inter.response.edit_message(content=f"An error occurred: {str(e)}")
             logging.error(f"Error in UpdateView interaction: {e}")
+            if not inter.response.is_done():
+                await inter.response.send_message(content=f"An error occurred: {str(e)}")
             return False
 
 class ControlPanelView(disnake.ui.View):
