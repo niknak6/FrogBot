@@ -13,7 +13,7 @@ import yaml
 import sys
 
 CONFIG = {
-    'VERSION': 'v3.0',
+    'VERSION': 'v2.9',
     'CONFIG_FILE': Path('config.yaml'),
     'COGS_DIR': Path("modules"),
     'TEST_GUILDS': [698205243103641711, 1137853399715549214],
@@ -79,12 +79,13 @@ class GitManager:
         try:
             code, stdout, stderr = await GitManager.run_cmd("git", "branch", "-r")
             if code != 0:
-                raise Exception(f"Failed to get branches: {stderr}")
+                logging.warning(f"Failed to get branches: {stderr}")
+                return ["beta"]
             branches = [b.strip().replace('origin/', '') for b in stdout.split('\n') if 'HEAD' not in b]
-            return sorted(branches)
+            return sorted(branches) if branches else ["beta"]
         except Exception as e:
             logging.error(f"Error getting git branches: {e}")
-            return ["main", "beta"]
+            return ["beta"]
 
     @staticmethod
     async def get_remote_modules() -> dict[str, dict]:
@@ -437,9 +438,16 @@ class ModuleListView(disnake.ui.View):
 
 class BranchSelect(disnake.ui.Select):
     def __init__(self, branches: list[str]):
+        options = [
+            disnake.SelectOption(
+                label=branch,
+                default=(branch == "beta")
+            ) 
+            for branch in branches
+        ]
         super().__init__(
             placeholder="Select branch",
-            options=[disnake.SelectOption(label=branch) for branch in branches],
+            options=options,
             min_values=1,
             max_values=1
         )
@@ -447,6 +455,7 @@ class BranchSelect(disnake.ui.Select):
 class UpdateView(disnake.ui.View):
     def __init__(self):
         super().__init__(timeout=300)
+        self.branch = "beta"
         self.add_item(disnake.ui.Button(
             label="Back",
             style=disnake.ButtonStyle.danger,
@@ -468,14 +477,13 @@ class UpdateView(disnake.ui.View):
                 )
             elif inter.component.custom_id == "update_and_restart":
                 await inter.response.edit_message(content="Updating and restarting...", view=None)
-                await bot_manager.update_bot(inter, inter.message.components[0].children[0].values[0])
+                await bot_manager.update_bot(inter, self.branch)
                 await bot_manager.restart_bot(inter)
             elif inter.component.type == disnake.ComponentType.select:
-                await inter.response.edit_message(content="Updating...", view=None)
-                await bot_manager.update_bot(inter, inter.values[0])
-                await inter.edit_original_message(
-                    content="Update complete! Use restart if needed.",
-                    view=None
+                self.branch = inter.values[0]
+                await inter.response.edit_message(
+                    content=f"Selected branch: {self.branch}",
+                    view=self
                 )
             return True
         except Exception as e:
@@ -520,10 +528,14 @@ class ControlPanelView(disnake.ui.View):
             return False
 
     async def show_update_options(self, inter: disnake.MessageInteraction):
-        branches = await GitManager.get_branches()
         update_view = UpdateView()
-        update_view.add_item(BranchSelect(branches))
-        await inter.response.edit_message(content="⬆️ Update Options", view=update_view)
+        branches = await GitManager.get_branches()
+        if branches:  # Only add select if we got branches
+            update_view.add_item(BranchSelect(branches))
+        await inter.response.edit_message(
+            content="⬆️ Update Options (default: beta)",
+            view=update_view
+        )
 
     async def confirm_restart(self, inter: disnake.MessageInteraction):
         class ConfirmView(disnake.ui.View):
