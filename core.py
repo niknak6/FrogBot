@@ -80,6 +80,15 @@ class GitManager:
         except Exception as e:
             logging.error(f"Error getting current branch: {e}")
             return "beta"
+        
+    @staticmethod
+    def get_version() -> str:
+        try:
+            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], stderr=subprocess.DEVNULL).decode().strip()
+            commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], stderr=subprocess.DEVNULL).decode().strip()[:7]
+            return f"{CONFIG['VERSION']} {branch} {commit}"
+        except subprocess.CalledProcessError:
+            return f"{CONFIG['VERSION']}-unknown"
 
     @staticmethod
     async def get_branches() -> list[str]:
