@@ -59,20 +59,27 @@ class GitManager:
     @staticmethod
     async def run_cmd(*args) -> Tuple[int, str, str]:
         try:
-            proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            proc = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
             stdout, stderr = await proc.communicate()
             return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
         except Exception as e:
             return -1, "", str(e)
 
     @staticmethod
-    def get_version() -> str:
+    async def get_current_branch() -> str:
         try:
-            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], stderr=subprocess.DEVNULL).decode().strip()
-            commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], stderr=subprocess.DEVNULL).decode().strip()[:7]
-            return f"{CONFIG['VERSION']} {branch} {commit}"
-        except subprocess.CalledProcessError:
-            return f"{CONFIG['VERSION']}-unknown"
+            code, stdout, stderr = await GitManager.run_cmd("git", "rev-parse", "--abbrev-ref", "HEAD")
+            if code != 0:
+                logging.warning(f"Failed to get current branch: {stderr}")
+                return "beta"
+            return stdout.strip() or "beta"
+        except Exception as e:
+            logging.error(f"Error getting current branch: {e}")
+            return "beta"
 
     @staticmethod
     async def get_branches() -> list[str]:
@@ -139,13 +146,20 @@ class BotManager:
     async def update_bot(self, ctx: commands.Context, branch: str) -> None:
         try:
             current_modules = ModuleLoader.get_available_modules()
-            for cmd in [
-                ["rev-parse", "--abbrev-ref", "HEAD"],
-                ["checkout", branch] if (await GitManager.run_cmd("git", "rev-parse", "--abbrev-ref", "HEAD"))[1] != branch else None,
-                ["pull", "origin", branch]
-            ]:
-                if cmd and (code := (await GitManager.run_cmd(*cmd))[0]) != 0:
-                    raise Exception(f"Git command failed: {cmd[0]}")
+            current_branch = await GitManager.get_current_branch()
+            
+            commands = [
+                ["git", "fetch", "origin"],  # First fetch updates
+                ["git", "checkout", branch] if current_branch != branch else None,
+                ["git", "pull", "origin", branch]
+            ]
+            
+            for cmd in commands:
+                if cmd:  # Skip None commands
+                    code, stdout, stderr = await GitManager.run_cmd(*cmd)
+                    if code != 0:
+                        raise Exception(f"Git command failed: {' '.join(cmd)}, Error: {stderr}")
+            
             remote_modules = await GitManager.get_remote_modules()
             for category, modules in remote_modules.items():
                 for module_name, url in modules.items():
@@ -156,6 +170,7 @@ class BotManager:
                     )
                     if module_id in current_modules:
                         await ModuleLoader.download_module(url, category, module_name)
+            
             await ctx.edit_original_response(content='Update complete.')
         except Exception as e:
             await ctx.edit_original_response(content=f"Update error: {e}")
