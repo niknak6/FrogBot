@@ -275,7 +275,7 @@ class ModuleLoader:
             module_dir.mkdir(parents=True, exist_ok=True)
             (module_dir / "__init__.py").touch(exist_ok=True)
             module_path = f"modules/{category if category != 'root' else ''}/{filename}".strip('/')
-            code, _, stderr = await GitManager.run_cmd(
+            code, stdout, stderr = await GitManager.run_cmd(
                 "git", "checkout", "origin/beta", "--", module_path
             )
             if code != 0:
@@ -426,7 +426,7 @@ class ModuleListView(disnake.ui.View):
                     is_selected = module_name in selected_modules
                     is_installed = module_id in current_modules
                     if is_selected and not is_installed and url:
-                        await ModuleLoader.download_module(url, self.category, module_name)
+                        await ModuleLoader.download_module(self.category, module_name)
                     elif not is_selected and is_installed:
                         ModuleLoader.uninstall_module(self.category, module_name)
                 for cog in list(client.cogs.keys()):
