@@ -161,7 +161,6 @@ class BotManager:
 
     async def update_bot(self, ctx: commands.Context, branch: str) -> None:
         try:
-            current_modules = ModuleLoader.get_available_modules()
             commands = [
                 ["git", "stash", "save", f"Auto-stash before update {datetime.now().isoformat()}"],
                 ["git", "fetch", "origin"],
@@ -172,16 +171,9 @@ class BotManager:
                 code, _, stderr = await GitManager.run_cmd(*cmd)
                 if code != 0:
                     raise Exception(f"Git command failed: {' '.join(cmd)}, Error: {stderr}")
-            remote_modules = await GitManager.get_remote_modules()
-            for category, modules in remote_modules.items():
-                for module_name, url in modules.items():
-                    module_id = (
-                        f"modules.{module_name[:-3]}" 
-                        if category == "root" 
-                        else f"modules.{category}.{module_name[:-3]}"
-                    )
-                    if module_id in current_modules:
-                        await ModuleLoader.download_module(url, category, module_name)
+            for cog in list(self.client.cogs.keys()):
+                self.client.remove_cog(cog)
+            ModuleLoader.load_all_modules(self.client)
             await ctx.edit_original_response(content='Update complete.')
         except Exception as e:
             await ctx.edit_original_response(content=f"Update error: {e}")
@@ -277,21 +269,18 @@ class ModuleLoader:
             cls.load_single_module(client, file_path, module_name)
 
     @staticmethod
-    async def download_module(url: str, category: str, filename: str) -> bool:
+    async def download_module(category: str, filename: str) -> bool:
         try:
-            temp_branch = f"temp_module_{int(datetime.now().timestamp())}"
-            commands = [
-                ["git", "fetch", "origin"],
-                ["git", "checkout", "-b", temp_branch],
-                ["git", "checkout", "origin/beta", "--", f"modules/{category if category != 'root' else ''}/{filename}".strip('/')],
-                ["git", "checkout", "-"],
-                ["git", "branch", "-D", temp_branch]
-            ]
-            for cmd in commands:
-                code, _, stderr = await GitManager.run_cmd(*cmd)
-                if code != 0:
-                    logging.error(f"Git command failed: {' '.join(cmd)}, Error: {stderr}")
-                    return False
+            module_dir = CONFIG['COGS_DIR'] / (category if category != 'root' else '')
+            module_dir.mkdir(parents=True, exist_ok=True)
+            (module_dir / "__init__.py").touch(exist_ok=True)
+            module_path = f"modules/{category if category != 'root' else ''}/{filename}".strip('/')
+            code, _, stderr = await GitManager.run_cmd(
+                "git", "checkout", "origin/beta", "--", module_path
+            )
+            if code != 0:
+                logging.error(f"Git command failed: git checkout origin/beta -- {module_path}, Error: {stderr}")
+                return False
             return True
         except Exception as e:
             logging.error(f"Error downloading module: {e}")
