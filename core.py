@@ -162,17 +162,16 @@ class BotManager:
     async def update_bot(self, ctx: commands.Context, branch: str) -> None:
         try:
             current_modules = ModuleLoader.get_available_modules()
-            current_branch = await GitManager.get_current_branch()
             commands = [
+                ["git", "stash", "save", f"Auto-stash before update {datetime.now().isoformat()}"],
                 ["git", "fetch", "origin"],
-                ["git", "checkout", branch] if current_branch != branch else None,
+                ["git", "checkout", branch],
                 ["git", "pull", "origin", branch]
             ]
             for cmd in commands:
-                if cmd:
-                    code, _, stderr = await GitManager.run_cmd(*cmd)
-                    if code != 0:
-                        raise Exception(f"Git command failed: {' '.join(cmd)}, Error: {stderr}")
+                code, _, stderr = await GitManager.run_cmd(*cmd)
+                if code != 0:
+                    raise Exception(f"Git command failed: {' '.join(cmd)}, Error: {stderr}")
             remote_modules = await GitManager.get_remote_modules()
             for category, modules in remote_modules.items():
                 for module_name, url in modules.items():
@@ -183,7 +182,6 @@ class BotManager:
                     )
                     if module_id in current_modules:
                         await ModuleLoader.download_module(url, category, module_name)
-            
             await ctx.edit_original_response(content='Update complete.')
         except Exception as e:
             await ctx.edit_original_response(content=f"Update error: {e}")
