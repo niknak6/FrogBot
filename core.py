@@ -300,135 +300,104 @@ class ModuleLoader:
             logging.error(f"Error uninstalling module: {e}")
             return False
 
-class ModuleCategoryView(disnake.ui.View):
+class ModuleListView(disnake.ui.View):
     def __init__(self):
         super().__init__(timeout=300)
-        self.add_item(disnake.ui.Button(
-            label="Back",
-            style=disnake.ButtonStyle.danger,
-            custom_id="module_category_back"
-        ))
+        self.current_page = 0
+        self.modules_per_page = 9
+        self.modules = {}
+        self.selected_modules = {}
+        self.add_navigation_buttons()
 
-    async def add_category_buttons(self, categories: list[str]):
-        for category in categories:
+    def add_navigation_buttons(self):
+        nav_buttons = [
+            ("◀", "prev_page", disnake.ButtonStyle.secondary),
+            ("▶", "next_page", disnake.ButtonStyle.secondary),
+            ("Back", "module_list_back", disnake.ButtonStyle.danger),
+            ("Apply", "apply_modules", disnake.ButtonStyle.success)
+        ]
+        for button in nav_buttons:
             self.add_item(disnake.ui.Button(
-                label=category.title(),
-                style=disnake.ButtonStyle.primary,
-                custom_id=f"category_{category}"
+                label=button[0],
+                custom_id=button[1],
+                style=button[2],
+                row=3
             ))
+
+    async def refresh_module_buttons(self, inter: disnake.MessageInteraction):
+        self.clear_items()
+        self.add_navigation_buttons()
+        if not self.modules:
+            remote_modules = await GitManager.get_remote_modules()
+            current_modules = ModuleLoader.get_available_modules()
+            for category, modules in remote_modules.items():
+                for module_name, url in modules.items():
+                    module_id = (
+                        f"modules.{module_name[:-3]}" 
+                        if category == "root" 
+                        else f"modules.{category}.{module_name[:-3]}"
+                    )
+                    module_path = f"{category}/{module_name}"
+                    self.modules[module_path] = {
+                        "id": module_id,
+                        "installed": module_id in current_modules,
+                        "category": category
+                    }
+                    if module_path not in self.selected_modules:
+                        self.selected_modules[module_path] = self.modules[module_path]["installed"]
+        total_pages = (len(self.modules) - 1) // self.modules_per_page + 1
+        for child in self.children:
+            if child.custom_id == "prev_page":
+                child.disabled = self.current_page <= 0
+            elif child.custom_id == "next_page":
+                child.disabled = self.current_page >= total_pages - 1
+        start_idx = self.current_page * self.modules_per_page
+        page_modules = list(self.modules.items())[start_idx:start_idx + self.modules_per_page]
+        for idx, (module_path, info) in enumerate(page_modules):
+            row = idx // 3
+            if row >= 3:
+                continue
+            self.add_item(disnake.ui.Button(
+                label=module_path.split('/')[-1],
+                style=disnake.ButtonStyle.green if self.selected_modules[module_path] else disnake.ButtonStyle.gray,
+                custom_id=f"toggle_module_{module_path}",
+                emoji="✅" if self.selected_modules[module_path] else "❌",
+                row=row
+            ))
+        content = f"🧩 Module Manager - Page {self.current_page + 1}/{total_pages}"
+        if not inter.response.is_done():
+            await inter.response.edit_message(content=content, view=self)
+        else:
+            await inter.edit_original_message(content=content, view=self)
 
     async def interaction_check(self, inter: disnake.MessageInteraction) -> bool:
         try:
-            if inter.component.custom_id == "module_category_back":
+            if inter.component.custom_id == "prev_page":
+                self.current_page = max(0, self.current_page - 1)
+                await self.refresh_module_buttons(inter)
+            elif inter.component.custom_id == "next_page":
+                total_pages = (len(self.modules) - 1) // self.modules_per_page + 1
+                self.current_page = min(total_pages - 1, self.current_page + 1)
+                await self.refresh_module_buttons(inter)
+            elif inter.component.custom_id == "module_list_back":
                 await inter.response.edit_message(
                     content=f"🤖 {client.user.display_name} Control Panel",
                     view=ControlPanelView()
-                )
-            elif inter.component.custom_id.startswith("category_"):
-                category = inter.component.custom_id.replace("category_", "")
-                module_view = ModuleListView(category)
-                await module_view.refresh_module_buttons(inter)
-            return True
-        except Exception as e:
-            if not inter.response.is_done():
-                await inter.response.send_message(content=f"An error occurred: {str(e)}", ephemeral=True)
-            logging.error(f"Error in ModuleCategoryView interaction: {e}")
-            return False
-
-class ModuleListView(disnake.ui.View):
-    def __init__(self, category: str):
-        super().__init__(timeout=300)
-        self.category = category
-        back_button = disnake.ui.Button(
-            label="Back",
-            style=disnake.ButtonStyle.danger,
-            custom_id="module_list_back",
-            row=4
-        )
-        apply_button = disnake.ui.Button(
-            label="Apply Changes",
-            style=disnake.ButtonStyle.success,
-            custom_id="apply_modules",
-            emoji="💾",
-            row=4
-        )
-        self.add_item(back_button)
-        self.add_item(apply_button)
-
-    async def refresh_module_buttons(self, inter: disnake.MessageInteraction):
-        remote_modules = await GitManager.get_remote_modules()
-        current_modules = ModuleLoader.get_available_modules()
-        category_modules = remote_modules.get(self.category, {})
-        current_row = 0
-        buttons_in_row = 0
-        max_buttons_per_row = 5
-        for module_name in category_modules:
-            module_id = (
-                f"modules.{module_name[:-3]}" 
-                if self.category == "root" 
-                else f"modules.{self.category}.{module_name[:-3]}"
-            )
-            is_installed = module_id in current_modules
-            if buttons_in_row >= max_buttons_per_row:
-                current_row += 1
-                buttons_in_row = 0
-            self.add_item(disnake.ui.Button(
-                label=module_name,
-                style=disnake.ButtonStyle.green if is_installed else disnake.ButtonStyle.gray,
-                custom_id=f"toggle_module_{module_name}",
-                emoji="✅" if is_installed else "❌",
-                row=current_row
-            ))
-            buttons_in_row += 1
-        if not inter.response.is_done():
-            await inter.response.edit_message(
-                content=f"🧩 Module Manager - {self.category.title()}",
-                view=self
-            )
-        else:
-            await inter.edit_original_message(
-                content=f"🧩 Module Manager - {self.category.title()}",
-                view=self
-            )
-
-    async def interaction_check(self, inter: disnake.MessageInteraction) -> bool:
-        try:
-            if inter.component.custom_id == "module_list_back":
-                category_view = ModuleCategoryView()
-                await category_view.add_category_buttons(
-                    (await GitManager.get_remote_modules()).keys()
-                )
-                await inter.response.edit_message(
-                    content="🧩 Module Manager",
-                    view=category_view
                 )
             elif inter.component.custom_id == "apply_modules":
                 await inter.response.edit_message(
                     content="Applying changes...",
                     view=None
                 )
-                selected_modules = [
-                    btn.label for btn in self.children 
-                    if isinstance(btn, disnake.ui.Button) 
-                    and btn.style == disnake.ButtonStyle.green
-                    and btn.custom_id.startswith("toggle_module_")
-                ]
-                remote_modules = await GitManager.get_remote_modules()
-                if not remote_modules:
-                    remote_modules = {self.category: {}}
-                current_modules = ModuleLoader.get_available_modules()
-                for module_name, url in remote_modules.get(self.category, {}).items():
-                    module_id = (
-                        f"modules.{module_name[:-3]}" 
-                        if self.category == "root" 
-                        else f"modules.{self.category}.{module_name[:-3]}"
-                    )
-                    is_selected = module_name in selected_modules
-                    is_installed = module_id in current_modules
-                    if is_selected and not is_installed and url:
-                        await ModuleLoader.download_module(self.category, module_name)
+                for module_path, info in self.modules.items():
+                    category = info["category"]
+                    filename = module_path.split('/')[-1]
+                    is_selected = self.selected_modules[module_path]
+                    is_installed = info["installed"]
+                    if is_selected and not is_installed:
+                        await ModuleLoader.download_module(category, filename)
                     elif not is_selected and is_installed:
-                        ModuleLoader.uninstall_module(self.category, module_name)
+                        ModuleLoader.uninstall_module(category, filename)
                 for cog in list(client.cogs.keys()):
                     client.remove_cog(cog)
                 ModuleLoader.load_all_modules(client)
@@ -437,14 +406,9 @@ class ModuleListView(disnake.ui.View):
                     view=None
                 )
             elif inter.component.custom_id.startswith("toggle_module_"):
-                button = [b for b in self.children if b.custom_id == inter.component.custom_id][0]
-                button.style = (
-                    disnake.ButtonStyle.gray 
-                    if button.style == disnake.ButtonStyle.green 
-                    else disnake.ButtonStyle.green
-                )
-                button.emoji = "❌" if button.style == disnake.ButtonStyle.gray else "✅"
-                await inter.response.edit_message(view=self)
+                module_path = inter.component.custom_id.replace("toggle_module_", "")
+                self.selected_modules[module_path] = not self.selected_modules[module_path]
+                await self.refresh_module_buttons(inter)
             return True
         except Exception as e:
             if not inter.response.is_done():
@@ -549,7 +513,7 @@ class ControlPanelView(disnake.ui.View):
     async def show_update_options(self, inter: disnake.MessageInteraction):
         update_view = UpdateView()
         branches = await GitManager.get_branches()
-        if branches:  # Only add select if we got branches
+        if branches:
             update_view.add_item(BranchSelect(branches))
         await inter.response.edit_message(
             content="⬆️ Update Options (default: beta)",
@@ -566,6 +530,7 @@ class ControlPanelView(disnake.ui.View):
             async def interaction_check(self, inter: disnake.MessageInteraction) -> bool:
                 try:
                     if inter.component.custom_id == "confirm_restart_yes":
+                        await inter.response.edit_message(content="Restarting...", view=None)
                         await bot_manager.restart_bot(inter)
                     else:
                         await inter.response.edit_message(content=f"🤖 {client.user.display_name} Control Panel", view=ControlPanelView())
@@ -595,26 +560,8 @@ class ControlPanelView(disnake.ui.View):
 
     async def show_module_options(self, inter: disnake.MessageInteraction):
         try:
-            remote_modules = await GitManager.get_remote_modules()
-            if not remote_modules:
-                if not inter.response.is_done():
-                    await inter.response.edit_message(
-                        content="Failed to fetch modules from GitHub",
-                        view=self
-                    )
-                return
-            category_view = ModuleCategoryView()
-            await category_view.add_category_buttons(remote_modules.keys())
-            if not inter.response.is_done():
-                await inter.response.edit_message(
-                    content="🧩 Module Manager",
-                    view=category_view
-                )
-            else:
-                await inter.edit_original_message(
-                    content="🧩 Module Manager",
-                    view=category_view
-                )
+            module_view = ModuleListView()
+            await module_view.refresh_module_buttons(inter)
         except Exception as e:
             if not inter.response.is_done():
                 await inter.response.send_message(
