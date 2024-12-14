@@ -1,4 +1,4 @@
-from disnake import TextInputStyle, ui, ApplicationCommandInteraction, NotFound, Forbidden, Message, Embed, Color
+from disnake import TextInputStyle, ui, ApplicationCommandInteraction, NotFound, Forbidden, Message, Embed, Color, Permissions
 from core import is_admin_or_privileged
 from disnake.ext import commands
 import asyncio
@@ -16,7 +16,7 @@ class WhiteboardCog(commands.Cog):
         """Create a new whiteboard message"""
         await self._show_whiteboard_modal(inter)
 
-    @commands.message_command(name="Edit Whiteboard")
+    @commands.message_command(name="Edit Whiteboard", default_member_permissions=Permissions(administrator=True))
     @is_admin_or_privileged(rank_id=1198482895342411846)
     async def edit_whiteboard(self, inter: ApplicationCommandInteraction, message: Message):
         """Edit an existing whiteboard message"""
