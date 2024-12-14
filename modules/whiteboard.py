@@ -84,8 +84,7 @@ class WhiteboardCog(commands.Cog):
                         return
                 else:
                     embed = self._create_whiteboard_embed(content)
-                    await inter.channel.send(embed=embed)
-                    await modal_inter.response.defer()
+                    await modal_inter.response.send_message(embed=embed)
                     return
 
             embed = self._create_whiteboard_embed(
