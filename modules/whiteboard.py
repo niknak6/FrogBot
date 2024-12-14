@@ -59,6 +59,15 @@ class WhiteboardCog(commands.Cog):
 
     async def _handle_whiteboard(self, inter: ApplicationCommandInteraction, message: Message = None):
         embed = message.embeds[0] if message else None
+        
+        # Extract authorized editor ID from existing maintainer list
+        editor_id = None
+        if embed and "\n\n**Whiteboard Maintainer(s):**" in embed.description:
+            maintainer_section = embed.description.split("**Whiteboard Maintainer(s):**")[1]
+            user_mentions = [m.strip() for m in maintainer_section.split(", ") if not m.startswith("<@&")]
+            if user_mentions:
+                editor_id = user_mentions[0].strip("<@>")
+
         modal = ui.Modal(
             title="Whiteboard",
             custom_id="whiteboard_modal",
@@ -80,7 +89,7 @@ class WhiteboardCog(commands.Cog):
                     custom_id="editor_id", 
                     style=TextInputStyle.short,
                     required=False,
-                    value=None
+                    value=editor_id
                 )
             ]
         )
@@ -98,17 +107,17 @@ class WhiteboardCog(commands.Cog):
             editor_id = modal_inter.text_values['editor_id']
             
             maintainers = []
-            # Add admins and privileged users
-            for member in inter.guild.members:
-                if member.guild_permissions.administrator or any(role.id == self.privileged_role_id for role in member.roles):
-                    maintainers.append(f"<@{member.id}>")
-            
+            # Add all admin roles to maintainers list
+            admin_roles = [role for role in inter.guild.roles if role.permissions.administrator]
+            maintainers.extend(f"<@&{role.id}>" for role in admin_roles)
+            # Add privileged role mention
+            maintainers.append(f"<@&{self.privileged_role_id}>")
+
             # Add specific editor if provided
             if editor_id:
                 try:
                     editor_id = int(editor_id)
-                    if editor_id not in [int(m.strip("<@>")) for m in maintainers]:
-                        maintainers.append(f"<@{editor_id}>")
+                    maintainers.append(f"<@{editor_id}>")
                 except ValueError:
                     pass
 
@@ -124,7 +133,17 @@ class WhiteboardCog(commands.Cog):
                 await message.edit(embed=embed)
                 await modal_inter.response.send_message("Updated successfully!", ephemeral=True)
             else:
-                await modal_inter.channel.send(embed=embed)
+                sent_message = await modal_inter.channel.send(embed=embed)
+                # Debug block - easily removable
+                debug_info = (
+                    f"Debug Info:\n"
+                    f"Raw maintainers list: {maintainers}\n"
+                    f"Admin roles found: {[f'{role.name}:{role.id}' for role in admin_roles]}\n"
+                    f"Privileged role ID: {self.privileged_role_id}\n"
+                    f"Editor ID if provided: {editor_id}"
+                )
+                await modal_inter.channel.send(f"```{debug_info}```")
+                # End debug block
                 await modal_inter.response.send_message("Created successfully!", ephemeral=True)
 
         except asyncio.TimeoutError:
