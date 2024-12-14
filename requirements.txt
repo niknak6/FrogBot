@@ -2,3 +2,4 @@ disnake
 aiosqlite
 openai
 psutil
+PyYAML
