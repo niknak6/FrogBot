@@ -3,11 +3,13 @@ from core import is_admin_or_privileged
 from disnake.ext import commands
 import asyncio
 
-TIMEOUT = 300
+CREATE_TIMEOUT = 1200
+EDIT_TIMEOUT = 600
 
 class WhiteboardCog(commands.Cog):
     def __init__(self, client):
         self.client = client
+        self.privileged_role_id = 1198482895342411846
 
     @commands.slash_command()
     async def whiteboard(self, inter: ApplicationCommandInteraction):
@@ -21,29 +23,39 @@ class WhiteboardCog(commands.Cog):
         await self._handle_whiteboard(inter)
 
     @whiteboard.sub_command(name="edit")
-    @is_admin_or_privileged(rank_id=1198482895342411846)
     async def edit_by_id(self, inter: ApplicationCommandInteraction, message_id: str):
         """Edit whiteboard by message ID"""
         try:
             message = await inter.channel.fetch_message(int(message_id))
-            if not self._is_valid_whiteboard(message):
-                await inter.response.send_message("Invalid whiteboard message.", ephemeral=True)
+            if not await self._can_edit_whiteboard(inter, message):
+                await inter.response.send_message("You don't have permission to edit this whiteboard.", ephemeral=True)
                 return
             await self._handle_whiteboard(inter, message)
         except Exception as e:
             await inter.response.send_message(str(e), ephemeral=True)
 
     @commands.message_command(name="Edit Whiteboard")
-    @is_admin_or_privileged(rank_id=1198482895342411846)
     async def edit_whiteboard(self, inter: ApplicationCommandInteraction, message: Message):
         """Edit whiteboard via message context"""
-        if not self._is_valid_whiteboard(message):
-            await inter.response.send_message("Invalid whiteboard message.", ephemeral=True)
+        if not await self._can_edit_whiteboard(inter, message):
+            await inter.response.send_message("You don't have permission to edit this whiteboard.", ephemeral=True)
             return
         await self._handle_whiteboard(inter, message)
 
-    def _is_valid_whiteboard(self, message: Message) -> bool:
-        return message.embeds and message.author.id == self.client.user.id
+    async def _can_edit_whiteboard(self, inter: ApplicationCommandInteraction, message: Message) -> bool:
+        if not message.embeds or message.author.id != self.client.user.id:
+            return False
+            
+        # Check if user is admin or has privileged role
+        if inter.author.guild_permissions.administrator or any(role.id == self.privileged_role_id for role in inter.author.roles):
+            return True
+
+        # Check if user is authorized editor
+        maintainer_section = message.embeds[0].description.split("**Whiteboard Maintainer(s):**")
+        if len(maintainer_section) > 1:
+            return f"<@{inter.author.id}>" in maintainer_section[1]
+        
+        return False
 
     async def _handle_whiteboard(self, inter: ApplicationCommandInteraction, message: Message = None):
         embed = message.embeds[0] if message else None
@@ -51,10 +63,25 @@ class WhiteboardCog(commands.Cog):
             title="Whiteboard",
             custom_id="whiteboard_modal",
             components=[
-                ui.TextInput(label="Title", custom_id="title", style=TextInputStyle.short, 
-                           value=embed.title if embed else "Whiteboard"),
-                ui.TextInput(label="Content", custom_id="content", style=TextInputStyle.paragraph, 
-                           value=embed.description if embed else None)
+                ui.TextInput(
+                    label="Title", 
+                    custom_id="title", 
+                    style=TextInputStyle.short,
+                    value=embed.title if embed else "Whiteboard"
+                ),
+                ui.TextInput(
+                    label="Content", 
+                    custom_id="content", 
+                    style=TextInputStyle.paragraph,
+                    value=embed.description.split("\n\n**Whiteboard")[0] if embed else None
+                ),
+                ui.TextInput(
+                    label="Authorized Editor ID (Optional)", 
+                    custom_id="editor_id", 
+                    style=TextInputStyle.short,
+                    required=False,
+                    value=None
+                )
             ]
         )
         
@@ -64,12 +91,34 @@ class WhiteboardCog(commands.Cog):
             modal_inter = await inter.client.wait_for(
                 'modal_submit',
                 check=lambda i: i.custom_id == modal.custom_id and i.author.id == inter.author.id,
-                timeout=TIMEOUT
+                timeout=EDIT_TIMEOUT if message else CREATE_TIMEOUT
             )
 
-            embed = Embed(title=modal_inter.text_values['title'],
-                         description=modal_inter.text_values['content'],
-                         color=Color.blue())
+            content = modal_inter.text_values['content']
+            editor_id = modal_inter.text_values['editor_id']
+            
+            maintainers = []
+            # Add admins and privileged users
+            for member in inter.guild.members:
+                if member.guild_permissions.administrator or any(role.id == self.privileged_role_id for role in member.roles):
+                    maintainers.append(f"<@{member.id}>")
+            
+            # Add specific editor if provided
+            if editor_id:
+                try:
+                    editor_id = int(editor_id)
+                    if editor_id not in [int(m.strip("<@>")) for m in maintainers]:
+                        maintainers.append(f"<@{editor_id}>")
+                except ValueError:
+                    pass
+
+            maintainer_text = "\n\n**Whiteboard Maintainer(s):**\n" + ", ".join(maintainers)
+            
+            embed = Embed(
+                title=modal_inter.text_values['title'],
+                description=f"{content}{maintainer_text}",
+                color=Color.blue()
+            )
 
             if message:
                 await message.edit(embed=embed)
