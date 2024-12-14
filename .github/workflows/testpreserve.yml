@@ -1,0 +1,66 @@
+name: Sync and Preserve
+
+on:
+  workflow_dispatch:
+    inputs:
+      local_branch:
+        description: 'Your local branch to update (e.g., main)'
+        required: true
+        default: 'FrogPilot-Staging'
+      upstream_url:
+        description: 'Full URL of upstream branch (e.g., https://github.com/upstream/repo/tree/main)'
+        required: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.event.inputs.local_branch }}
+
+    - name: Configure Git
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+
+    - name: Parse Upstream URL
+      run: |
+        UPSTREAM_URL="${{ github.event.inputs.upstream_url }}"
+        UPSTREAM_REPO=$(echo $UPSTREAM_URL | sed -E 's|https://github.com/([^/]+/[^/]+).*|\1|')
+        UPSTREAM_BRANCH=$(echo $UPSTREAM_URL | sed -E 's|.*/tree/([^/]+).*|\1|')
+        echo "UPSTREAM_REPO=$UPSTREAM_REPO" >> $GITHUB_ENV
+        echo "UPSTREAM_BRANCH=$UPSTREAM_BRANCH" >> $GITHUB_ENV
+
+    - name: Add Upstream Remote
+      run: git remote add upstream https://github.com/${{ env.UPSTREAM_REPO }}.git
+
+    - name: Fetch Upstream
+      run: git fetch upstream
+
+    - name: Rebase on Upstream
+      run: |
+        git rebase upstream/${{ env.UPSTREAM_BRANCH }}
+
+    - name: Push Changes
+      run: |
+        if git push origin ${{ github.event.inputs.local_branch }} --force-with-lease; then
+          if git diff --quiet HEAD upstream/${{ env.UPSTREAM_BRANCH }}; then
+            echo "Branch is already up to date with upstream. No changes were made."
+          else
+            echo "Changes were successfully pushed to your branch."
+          fi
+        else
+          echo "Failed to push changes. There might be conflicts."
+          exit 1
+        fi
+
+    - name: Check for Conflicts
+      run: |
+        if git status | grep -q "You have unmerged paths"; then
+          echo "Conflicts detected. Manual intervention required."
+          git status
+          exit 1
+        fi
